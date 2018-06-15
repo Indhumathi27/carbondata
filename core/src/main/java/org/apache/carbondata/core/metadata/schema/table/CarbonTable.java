@@ -624,6 +624,27 @@ public class CarbonTable implements Serializable {
       if (dim.getColName().equalsIgnoreCase(columnName)) {
         carbonDimension = dim;
         break;
+      } else if (dim.getListOfChildDimensions() != null) {
+        if (dim.getListOfChildDimensions().size() >= 1) {
+          for (CarbonDimension list : dim.getListOfChildDimensions()) {
+            if (list.getListOfChildDimensions().size() > 1) {
+              for (CarbonDimension dim1 : dim.getListOfChildDimensions().get(0)
+                  .getListOfChildDimensions()) {
+                if (dim1.getColName().equalsIgnoreCase(columnName)) {
+                  carbonDimension = dim1;
+                  String colName = dim1.getColName();
+                  String[] colsplits = colName.split("\\.");
+                  for (CarbonDimension dims : dimList) {
+                    if (dims.getColName().equalsIgnoreCase(colsplits[0])) {
+                      carbonDimension.addParentOrdinal(dims.getOrdinal());
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
     List<CarbonDimension> implicitDimList = tableImplicitDimensionsMap.get(tableName);

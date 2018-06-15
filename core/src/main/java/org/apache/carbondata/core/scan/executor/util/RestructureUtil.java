@@ -109,7 +109,14 @@ public class RestructureUtil {
         for (CarbonDimension tableDimension : tableComplexDimension) {
           if (isColumnMatches(isTransactionalTable, queryDimension.getDimension(),
               tableDimension)) {
-            ProjectionDimension currentBlockDimension = new ProjectionDimension(tableDimension);
+            ProjectionDimension currentBlockDimension;
+            // TODO optimize for complex projection
+            if(queryDimension.getDimension().getParentOrdinal() != -1) {
+               currentBlockDimension = new ProjectionDimension(queryDimension.getDimension());
+            }
+            else {
+               currentBlockDimension = new ProjectionDimension(tableDimension);
+            }
             // TODO: for complex dimension set scale and precision by traversing
             // the child dimensions
             currentBlockDimension.setOrdinal(queryDimension.getOrdinal());
@@ -156,8 +163,15 @@ public class RestructureUtil {
     // If it is non transactional table just check the column names, no need to validate
     // column id as multiple sdk's output placed in a single folder doesn't have same
     // column ID but can have same column name
-    return (tableColumn.getColumnId().equals(queryColumn.getColumnId()) ||
-        (!isTransactionalTable && tableColumn.getColName().equals(queryColumn.getColName())));
+    // TODO change for complex projection
+    if (tableColumn.getColumnId().equals(queryColumn.getColumnId()) ||
+        (!isTransactionalTable && tableColumn.getColName().equals(queryColumn.getColName()))){
+      return true;
+    }
+    else
+    {
+      return true;
+    }
   }
 
   /**

@@ -22,6 +22,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.CarbonInputMetrics
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, GetArrayItem, GetStructField, NamedExpression}
 import org.apache.spark.sql.execution.command.management.CarbonInsertIntoCommand
 import org.apache.spark.sql.hive.CarbonRelation
 import org.apache.spark.sql.optimizer.CarbonFilters
@@ -67,14 +68,60 @@ case class CarbonDatasourceHadoopRelation(
   override def schema: StructType = tableSchema.getOrElse(carbonRelation.schema)
 
   def buildScan(requiredColumns: Array[String],
+      projects: Seq[NamedExpression],
       filters: Array[Filter],
       partitions: Seq[PartitionSpec]): RDD[InternalRow] = {
     val filterExpression: Option[Expression] = filters.flatMap { filter =>
       CarbonFilters.createCarbonFilter(schema, filter)
     }.reduceOption(new AndExpression(_, _))
 
+    val reqcol = projects.map{
+      case a@Alias(s: GetStructField, name) =>
+        if(!s.childSchema.contains(GetArrayItem))
+          {
+            s.toString()
+          }
+      case a@Alias(s: GetArrayItem, name) =>
+        None
+      case other => None
+    }
+
+    var reqcols: Array[String] = null
+
+    reqcol.foreach {
+      f =>
+        if (f != None) {
+          var lis = reqcol.mkString("(", ",", ")")
+          lis = lis.replace("(", "")
+          lis = lis.replace(")", "")
+          reqcols = lis.split(",")
+          for (i <- 0 until reqcols.length) {
+            if (reqcols(i).contains(".")) {
+              var removeExprId = reqcols(i)
+                .substring(reqcols(i).indexOf("#"), reqcols(i).indexOf("."))
+              reqcols(i) = reqcols(i).replaceAll(removeExprId, "")
+            }
+            else {
+              var removeExprId = reqcols(i).substring(reqcols(i).indexOf("#"), reqcols(i).length)
+              reqcols(i) = reqcols(i).replaceAll(removeExprId, "")
+            }
+          }
+        }
+    }
+
+    if(reqcols != null) {
+      for (i <- 0 until requiredColumns.length) {
+        for (j <- 0 until reqcols.length) {
+          if (reqcols(j).contains(requiredColumns(i))) {
+            requiredColumns(i) = reqcols(j)
+          }
+        }
+      }
+    }
+
     val projection = new CarbonProjection
     requiredColumns.foreach(projection.addColumn)
+
     CarbonSession.threadUnset(CarbonCommonConstants.SUPPORT_DIRECT_QUERY_ON_DATAMAP)
     val inputMetricsStats: CarbonInputMetrics = new CarbonInputMetrics
     new CarbonScanRDD(
