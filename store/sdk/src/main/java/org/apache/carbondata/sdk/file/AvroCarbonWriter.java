@@ -18,6 +18,8 @@
 package org.apache.carbondata.sdk.file;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -29,6 +31,7 @@ import java.util.UUID;
 import org.apache.carbondata.common.annotations.InterfaceAudience;
 import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.keygenerator.directdictionary.timestamp.DateDirectDictionaryGenerator;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
@@ -46,6 +49,7 @@ import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.util.Utf8;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.JobID;
@@ -132,6 +136,7 @@ public class AvroCarbonWriter extends CarbonWriter {
         break;
       case DOUBLE:
       case STRING:
+      case ENUM:
         out = fieldValue;
         break;
       case FLOAT:
@@ -213,6 +218,187 @@ public class AvroCarbonWriter extends CarbonWriter {
         }
         out = new ArrayObject(arrayChildObjects);
         break;
+      case BYTES:
+        // DECIMAL type is defined in Avro as a BYTE type with the logicalType property
+        // set to "decimal" and a specified precision and scale
+        if (logicalType instanceof LogicalTypes.Decimal) {
+          out = new BigDecimal(new String(((ByteBuffer) fieldValue).array(),
+              CarbonCommonConstants.DEFAULT_CHARSET_CLASS));;
+        } else {
+          out = fieldValue;
+        }
+        break;
+      case UNION:
+        List<Schema> fieldsUnion = avroField.schema().getTypes();
+        int countIfNotNull = 0;
+        for (Schema unionField : fieldsUnion) {
+          if (!unionField.getType().equals(Schema.Type.NULL)) {
+            countIfNotNull++;
+          }
+        }
+        Object[] values;
+        values = new Object[countIfNotNull];
+        int j = 0;
+        for (Schema unionField : fieldsUnion) {
+          if (!unionField.getType().equals(Schema.Type.NULL)) {
+            values[j] = avroFieldToObjectUnion(unionField, fieldValue, avroField);
+            j++;
+          }
+        }
+        out = new StructObject(values);
+        break;
+      case NULL:
+        out = null;
+        break;
+      default:
+        throw new UnsupportedOperationException(
+            "carbon not support " + type.toString() + " avro type yet");
+    }
+    return out;
+  }
+
+  /**
+   * returns object value to be stored by union type
+   * @param avroField
+   * @param fieldValue
+   * @param avroFields
+   * @return
+   */
+  private Object avroFieldToObjectUnion(Schema avroField, Object fieldValue,
+      Schema.Field avroFields) {
+    Object out;
+    Schema.Type type = avroField.getType();
+    LogicalType logicalType = avroField.getLogicalType();
+    switch (type) {
+      case INT:
+        if (fieldValue instanceof Integer) {
+          if (logicalType != null) {
+            if (logicalType instanceof LogicalTypes.Date) {
+              int dateIntValue = (int) fieldValue;
+              out = dateIntValue * DateDirectDictionaryGenerator.MILLIS_PER_DAY;
+            } else {
+              LOGGER.warn("Actual type: INT, Logical Type: " + logicalType.getName());
+              out = fieldValue;
+            }
+          } else {
+            out = fieldValue;
+          }
+        } else {
+          out = null;
+        }
+        break;
+      case BOOLEAN:
+        if (fieldValue instanceof Boolean) {
+          out = fieldValue;
+        } else {
+          out = null;
+        }
+        break;
+      case LONG:
+        if (fieldValue instanceof Long) {
+          if (logicalType != null && !(logicalType instanceof LogicalTypes.TimestampMillis)) {
+            if (logicalType instanceof LogicalTypes.TimestampMicros) {
+              long dateIntValue = (long) fieldValue;
+              out = dateIntValue / 1000L;
+            } else {
+              LOGGER.warn("Actual type: INT, Logical Type: " + logicalType.getName());
+              out = fieldValue;
+            }
+          } else {
+            out = fieldValue;
+          }
+        } else {
+          out = null;
+        }
+        break;
+      case DOUBLE:
+        if (fieldValue instanceof Double) {
+          out = fieldValue;
+        } else {
+          out = null;
+        }
+        break;
+      case STRING:
+        if (fieldValue instanceof Utf8 || fieldValue instanceof String) {
+          out = fieldValue;
+        } else {
+          out = null;
+        }
+        break;
+      case FLOAT:
+        // direct conversion will change precision. So parse from string.
+        // also carbon internally needs float as double
+        if (fieldValue instanceof Float) {
+          out = Double.parseDouble(fieldValue.toString());
+        } else {
+          out = null;
+        }
+        break;
+      case RECORD:
+        if (fieldValue instanceof GenericData.Record) {
+          List<Schema.Field> fields = avroField.getFields();
+
+          Object[] structChildObjects = new Object[fields.size()];
+          for (int i = 0; i < fields.size(); i++) {
+            Object childObject =
+                avroFieldToObject(fields.get(i), ((GenericData.Record) fieldValue).get(i));
+            if (childObject != null) {
+              structChildObjects[i] = childObject;
+            }
+          }
+          out = new StructObject(structChildObjects);;
+        } else {
+          out = new StructObject(null);
+        }
+        break;
+      case ARRAY:
+        if (fieldValue instanceof GenericData.Array || fieldValue instanceof ArrayList) {
+          Object[] arrayChildObjects;
+          if (fieldValue instanceof GenericData.Array) {
+            int size = ((GenericData.Array) fieldValue).size();
+            arrayChildObjects = new Object[size];
+            for (int i = 0; i < size; i++) {
+              Object childObject = avroFieldToObject(
+                  new Schema.Field(avroFields.name(), avroField.getElementType(), avroFields.doc(),
+                      avroFields.defaultVal()), ((GenericData.Array) fieldValue).get(i));
+              if (childObject != null) {
+                arrayChildObjects[i] = childObject;
+              }
+            }
+          } else {
+            int size = ((ArrayList) fieldValue).size();
+            arrayChildObjects = new Object[size];
+            for (int i = 0; i < size; i++) {
+              Object childObject = avroFieldToObject(
+                  new Schema.Field(avroFields.name(), avroField.getElementType(), avroFields.doc(),
+                      avroFields.defaultVal()), ((ArrayList) fieldValue).get(i));
+              if (childObject != null) {
+                arrayChildObjects[i] = childObject;
+              }
+            }
+          }
+          out = new ArrayObject(arrayChildObjects);
+        } else {
+          out = new ArrayObject(null);
+        }
+        break;
+      case BYTES:
+        // DECIMAL type is defined in Avro as a BYTE type with the logicalType property
+        // set to "decimal" and a specified precision and scale
+        if (logicalType instanceof LogicalTypes.Decimal) {
+          out = new BigDecimal(new String(((ByteBuffer) fieldValue).array(),
+              CarbonCommonConstants.DEFAULT_CHARSET_CLASS));
+        } else {
+          out = fieldValue;
+        }
+        break;
+      case ENUM:
+        if (fieldValue instanceof GenericData.EnumSymbol) {
+          out = fieldValue;
+        } else {
+          out = null;
+        }
+        break;
       case NULL:
         out = null;
         break;
@@ -272,8 +458,6 @@ public class AvroCarbonWriter extends CarbonWriter {
         return new Field(fieldName, DataTypes.DOUBLE);
       case STRING:
         return new Field(fieldName, DataTypes.STRING);
-      case FLOAT:
-        return new Field(fieldName, DataTypes.DOUBLE);
       case MAP:
         // recursively get the sub fields
         ArrayList<StructField> mapSubFields = new ArrayList<>();
@@ -289,6 +473,21 @@ public class AvroCarbonWriter extends CarbonWriter {
           return new Field(fieldName, mapType, mapSubFields);
         }
         return null;
+      case ENUM:
+        return new Field(fieldName, DataTypes.STRING);
+      case FLOAT:
+        return new Field(fieldName, DataTypes.DOUBLE);
+      case UNION:
+        int i = 0;
+        // Get union types and store as Struct<type>
+        ArrayList<StructField> unionFields = new ArrayList<>();
+        for (Schema avroSubField : avroField.schema().getTypes()) {
+          StructField unionField = prepareSubFields(avroField.name() + i++, avroSubField);
+          if (unionField != null) {
+            unionFields.add(unionField);
+          }
+        }
+        return new Field(fieldName, "struct", unionFields);
       case RECORD:
         // recursively get the sub fields
         ArrayList<StructField> structSubFields = new ArrayList<>();
@@ -299,6 +498,15 @@ public class AvroCarbonWriter extends CarbonWriter {
           }
         }
         return new Field(fieldName, "struct", structSubFields);
+      case BYTES:
+        // DECIMAL type is defined in Avro as a BYTE type with the logicalType property
+        // set to "decimal" and a specified precision and scale
+        if (logicalType instanceof LogicalTypes.Decimal) {
+          int precision = ((LogicalTypes.Decimal) childSchema.getLogicalType()).getPrecision();
+          int scale = ((LogicalTypes.Decimal) childSchema.getLogicalType()).getScale();
+          return new Field(fieldName, DataTypes.createDecimalType(precision, scale));
+        }
+        return null;
       case ARRAY:
         // recursively get the sub fields
         ArrayList<StructField> arraySubField = new ArrayList<>();
@@ -366,6 +574,19 @@ public class AvroCarbonWriter extends CarbonWriter {
           return new StructField(fieldName, mapType, mapStructFields);
         }
         return null;
+      case ENUM:
+        return new StructField(fieldName, DataTypes.STRING);
+      case UNION:
+        // recursively get the sub types
+        int i = 0;
+        ArrayList<StructField> structSubTypes = new ArrayList<>();
+        for (Schema avroSubField : childSchema.getTypes()) {
+          StructField structField = prepareSubFields(fieldName + i++, avroSubField);
+          if (structField != null) {
+            structSubTypes.add(structField);
+          }
+        }
+        return (new StructField(fieldName, DataTypes.createStructType(structSubTypes)));
       case RECORD:
         // recursively get the sub fields
         ArrayList<StructField> structSubFields = new ArrayList<>();
@@ -385,6 +606,15 @@ public class AvroCarbonWriter extends CarbonWriter {
         } else {
           return null;
         }
+      case BYTES:
+        // DECIMAL type is defined in Avro as a BYTE type with the logicalType property
+        // set to "decimal" and a specified precision and scale
+        if (logicalType instanceof LogicalTypes.Decimal) {
+          int precision = ((LogicalTypes.Decimal) childSchema.getLogicalType()).getPrecision();
+          int scale = ((LogicalTypes.Decimal) childSchema.getLogicalType()).getScale();
+          return new StructField(fieldName, DataTypes.createDecimalType(precision, scale));
+        }
+        return null;
       case NULL:
         return null;
       default:
@@ -426,6 +656,7 @@ public class AvroCarbonWriter extends CarbonWriter {
       case DOUBLE:
         return DataTypes.DOUBLE;
       case STRING:
+      case ENUM:
         return DataTypes.STRING;
       case FLOAT:
         return DataTypes.DOUBLE;
@@ -439,6 +670,16 @@ public class AvroCarbonWriter extends CarbonWriter {
           return DataTypes.createMapType(ketType, valueType);
         }
         return null;
+      case UNION:
+        int i = 0;
+        ArrayList<StructField> unionFields = new ArrayList<>();
+        for (Schema avroSubField : childSchema.getTypes()) {
+          StructField unionField = prepareSubFields(avroSubField.getName() + i++, avroSubField);
+          if (unionField != null) {
+            unionFields.add(unionField);
+          }
+        }
+        return DataTypes.createStructType(unionFields);
       case RECORD:
         // recursively get the sub fields
         ArrayList<StructField> structSubFields = new ArrayList<>();
@@ -457,6 +698,15 @@ public class AvroCarbonWriter extends CarbonWriter {
         } else {
           return null;
         }
+      case BYTES:
+        // DECIMAL type is defined in Avro as a BYTE type with the logicalType property
+        // set to "decimal" and a specified precision and scale
+        if (logicalType instanceof LogicalTypes.Decimal) {
+          int precision = ((LogicalTypes.Decimal) childSchema.getLogicalType()).getPrecision();
+          int scale = ((LogicalTypes.Decimal) childSchema.getLogicalType()).getScale();
+          return DataTypes.createDecimalType(precision, scale);
+        }
+        return null;
       case NULL:
         return null;
       default:
