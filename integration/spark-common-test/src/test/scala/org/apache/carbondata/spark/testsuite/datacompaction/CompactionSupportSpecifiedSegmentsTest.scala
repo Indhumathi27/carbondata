@@ -129,5 +129,23 @@ class CompactionSupportSpecifiedSegmentsTest
         assert(e.getMessage.startsWith("Custom segments not supported"))
     }
   }
+
+  test("test table level compaction for 6,0") {
+    sql("DROP TABLE IF EXISTS seg_compact")
+    sql(
+      """
+        |CREATE TABLE seg_compact
+        |(id INT, name STRING, city STRING, age INT)
+        |STORED BY 'org.apache.carbondata.format'
+        |TBLPROPERTIES('COMPACTION_LEVEL_THRESHOLD'='6,0','auto_load_merge'='true')
+      """.stripMargin)
+    for (i <- 0 until 6) {
+      sql(s"LOAD DATA LOCAL INPATH '$filePath' INTO TABLE seg_compact")
+    }
+    sql("SHOW SEGMENTS FOR TABLE seg_compact").show(false)
+    assert(sql(s"show segments for table seg_compact").collect().length == 7)
+    checkExistence(sql("SHOW SEGMENTS FOR TABLE seg_compact"), true, "0.1Success")
+  }
+
 }
 

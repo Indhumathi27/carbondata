@@ -58,6 +58,8 @@ class CarbonSource extends CreatableRelationProvider with RelationProvider
 
   override def shortName(): String = "carbondata"
 
+  private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
+
   // will be called if hive supported create table command is provided
   override def createRelation(sqlContext: SQLContext,
       parameters: Map[String, String]): BaseRelation = {
@@ -143,7 +145,11 @@ class CarbonSource extends CreatableRelationProvider with RelationProvider
       .exists(_.table.equalsIgnoreCase(tableName))) {
         getPathForTable(sqlContext.sparkSession, dbName, tableName, newParameters)
     } else {
-        createTableIfNotExists(sqlContext.sparkSession, newParameters, dataSchema)
+      createTableIfNotExists(sqlContext.sparkSession,
+        dbName,
+        tableName,
+        newParameters,
+        dataSchema)
     }
 
     CarbonDatasourceHadoopRelation(sqlContext.sparkSession, Array(path), updatedParams,
@@ -160,6 +166,8 @@ class CarbonSource extends CreatableRelationProvider with RelationProvider
 
   private def createTableIfNotExists(
       sparkSession: SparkSession,
+      dbName: String,
+      tableName: String,
       parameters: Map[String, String],
       dataSchema: StructType): (String, Map[String, String]) = {
 
@@ -167,10 +175,18 @@ class CarbonSource extends CreatableRelationProvider with RelationProvider
     val tableName: String = parameters.getOrElse("tableName", "").toLowerCase
 
     try {
-      val carbonTable = CarbonEnv.getCarbonTable(Some(dbName), tableName)(sparkSession)
-      (carbonTable.getTablePath, parameters)
+      if (!(parameters.contains("carbonschemapartsno")) ||
+          parameters.contains("carbonSchemaPartsNo")) {
+        val carbonTable = CarbonEnv.getCarbonTable(Some(dbName), tableName)(sparkSession)
+        (carbonTable.getTablePath, parameters)
+      } else {
+        (getPathForTable(sparkSession, dbName, tableName, parameters))
+      }
     } catch {
       case _: NoSuchTableException =>
+        LOGGER
+          .warn("Carbon Table [" + dbName + " ]" + "is not found,"
+                + "Now existing Schema file will be overwritten with default table properties")
         val metaStore = CarbonEnv.getInstance(sparkSession).carbonMetastore
         val identifier = AbsoluteTableIdentifier.from(
           CarbonEnv.getTablePath(Some(dbName), tableName)(sparkSession),
