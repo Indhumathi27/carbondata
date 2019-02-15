@@ -23,15 +23,33 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.carbondata.common.exceptions.sql.NoSuchDataMapException;
+import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.datamap.DataMapStoreManager;
+import org.apache.carbondata.core.datamap.Segment;
+import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
+import org.apache.carbondata.core.datastore.impl.FileFactory;
+import org.apache.carbondata.core.locks.ICarbonLock;
+import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
+import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
+import org.apache.carbondata.core.metadata.schema.table.RelationIdentifier;
+import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
+import org.apache.carbondata.core.statusmanager.SegmentStatus;
+import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
+import org.apache.carbondata.core.util.CarbonUtil;
+import org.apache.carbondata.core.util.path.CarbonTablePath;
+
+import org.apache.log4j.Logger;
 
 /**
  * Maintains the status of each datamap. As per the status query will decide whether to hit datamap
  * or not.
  */
 public class DataMapStatusManager {
+
+  private static final Logger LOGGER =
+      LogServiceFactory.getLogService(DataMapStatusManager.class.getName());
 
   // Create private constructor to not allow create instance of it
   private DataMapStatusManager() {
@@ -125,6 +143,92 @@ public class DataMapStatusManager {
   private static DataMapSchema getDataMapSchema(String dataMapName)
       throws IOException, NoSuchDataMapException {
     return DataMapStoreManager.getInstance().getDataMapSchema(dataMapName);
+  }
+
+  /**
+   * Returns valid segment list for a given RelationIdentifier
+   *
+   * @param relationIdentifier
+   * @return
+   * @throws IOException
+   */
+  public static List<String> getSegmentList(RelationIdentifier relationIdentifier)
+      throws IOException {
+    List<String> segmentList = new ArrayList<>();
+    AbsoluteTableIdentifier absoluteTableIdentifier =
+        AbsoluteTableIdentifier.from(relationIdentifier.getTablePath());
+    List<Segment> validSegments =
+        new SegmentStatusManager(absoluteTableIdentifier).getValidAndInvalidSegments()
+            .getValidSegments();
+    for (Segment segment : validSegments) {
+      segmentList.add(segment.getSegmentNo());
+    }
+    return segmentList;
+  }
+
+  /**
+   * This method will delete segment folders of the mv datamap table and update the sync information
+   * in case of Insert-Overwrite/Update operation on main table
+   */
+  public static void cleanMVdatamap(CarbonTable carbonTable) throws IOException {
+    List<DataMapSchema> allDataMapSchemas =
+        DataMapStoreManager.getInstance().getDataMapSchemasOfTable(carbonTable);
+    for (DataMapSchema datamapschema : allDataMapSchemas) {
+      if (datamapschema.getProviderName()
+          .equalsIgnoreCase(DataMapClassProvider.MV.getShortName())) {
+        CarbonTable datamapTable = CarbonTable
+            .buildFromTablePath(datamapschema.getRelationIdentifier().getTableName(),
+                datamapschema.getRelationIdentifier().getDatabaseName(),
+                datamapschema.getRelationIdentifier().getTablePath(),
+                datamapschema.getRelationIdentifier().getTableId());
+        SegmentStatusManager segmentStatusManager =
+            new SegmentStatusManager(datamapTable.getAbsoluteTableIdentifier());
+        ICarbonLock carbonLock = segmentStatusManager.getTableStatusLock();
+        try {
+          if (carbonLock.lockWithRetries()) {
+            LOGGER.info(
+                "Acquired lock for table" + datamapTable.getDatabaseName() + "." + datamapTable
+                    .getTableName() + " for table status updation");
+            LoadMetadataDetails[] loadMetadataDetails =
+                SegmentStatusManager.readLoadMetadata(datamapTable.getMetadataPath());
+            List<CarbonFile> staleFolders = new ArrayList<>();
+            for (LoadMetadataDetails entry : loadMetadataDetails) {
+              entry.setSegmentStatus(SegmentStatus.MARKED_FOR_DELETE);
+              // For insert overwrite, we will delete the old segment folder immediately
+              // So collect the old segments here
+              String segmentPath = CarbonTablePath
+                  .getSegmentPath(datamapschema.getRelationIdentifier().getTablePath(),
+                      entry.getLoadName());
+              if (FileFactory.isFileExist(segmentPath, FileFactory.getFileType(segmentPath))) {
+                staleFolders.add(FileFactory.getCarbonFile(segmentPath));
+              }
+            }
+            SegmentStatusManager.writeLoadDetailsIntoFile(CarbonTablePath
+                    .getTableStatusFilePath(datamapschema.getRelationIdentifier().getTablePath()),
+                loadMetadataDetails);
+            // Update sync information for mv
+            storageProvider.updateSyncInfo(datamapschema);
+            // Delete all old stale segment folders
+            for (CarbonFile staleFolder : staleFolders) {
+              try {
+                CarbonUtil.deleteFoldersAndFiles(staleFolder);
+              } catch (IOException | InterruptedException e) {
+                LOGGER.error("Failed to delete stale folder: " + e.getMessage(), e);
+              }
+            }
+          }
+        } finally {
+          if (carbonLock.unlock()) {
+            LOGGER.info("Table unlocked successfully after table status updation" + datamapTable
+                .getDatabaseName() + "." + datamapTable.getTableName());
+          } else {
+            LOGGER.error(
+                "Unable to unlock Table lock for table" + datamapTable.getDatabaseName() + "."
+                    + datamapTable.getTableName() + " during table status updation");
+          }
+        }
+      }
+    }
   }
 
 }

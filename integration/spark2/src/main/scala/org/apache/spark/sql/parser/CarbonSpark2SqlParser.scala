@@ -77,7 +77,8 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
 
   protected lazy val startCommand: Parser[LogicalPlan] =
     loadManagement | showLoads | alterTable | restructure | updateTable | deleteRecords |
-    alterPartition | datamapManagement | alterTableFinishStreaming | stream | cli | cacheManagement
+    alterPartition | datamapManagement | alterTableFinishStreaming | stream | cli |
+    cacheManagement | alterDataMap
 
   protected lazy val loadManagement: Parser[LogicalPlan] =
     deleteLoadsByID | deleteLoadsByLoadDate | cleanFiles | loadDataNew
@@ -151,6 +152,17 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
     ALTER ~> TABLE ~> (ident <~ ".").? ~ ident <~ FINISH <~ STREAMING <~ opt(";") ^^ {
       case dbName ~ table =>
         CarbonAlterTableFinishStreaming(dbName, table)
+    }
+
+  protected lazy val alterDataMap: Parser[LogicalPlan] =
+    ALTER ~> DATAMAP ~> (ident <~ ".").? ~ ident ~ (COMPACT ~ stringLit) ~
+    (WHERE ~> (SEGMENT ~ "." ~ ID) ~> IN ~> "(" ~> repsep(segmentId, ",") <~ ")").? <~
+    opt(";") ^^ {
+      case dbName ~ datamap ~ (compact ~ compactType) ~ segs =>
+        val altertablemodel =
+          AlterTableModel(convertDbNameToLowerCase(dbName), datamap + "_table", None, compactType,
+            Some(System.currentTimeMillis()), null, segs)
+        CarbonAlterTableCompactionCommand(altertablemodel)
     }
 
   /**

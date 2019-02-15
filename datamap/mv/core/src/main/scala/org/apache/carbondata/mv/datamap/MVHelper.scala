@@ -35,6 +35,7 @@ import org.apache.spark.sql.parser.CarbonSpark2SqlParser
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.core.datamap.DataMapStoreManager
+import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider
 import org.apache.carbondata.core.metadata.schema.table.{DataMapSchema, RelationIdentifier}
 import org.apache.carbondata.datamap.DataMapManager
@@ -79,6 +80,8 @@ object MVHelper {
     }
     val tableProperties = mutable.Map[String, String]()
     dmProperties.foreach(t => tableProperties.put(t._1, t._2))
+
+    tableProperties.put("isMVdatamapTable", "true")
 
     val selectTables = getTables(logicalPlan)
     selectTables.foreach { selectTable =>
@@ -127,14 +130,18 @@ object MVHelper {
     dataMapSchema
       .setRelationIdentifier(new RelationIdentifier(tableIdentifier.database.get,
         tableIdentifier.table,
-        ""))
+        CarbonEnv.getCarbonTable(tableIdentifier)(sparkSession).getTableId))
 
     val parentIdents = selectTables.map { table =>
-      new RelationIdentifier(table.database, table.identifier.table, "")
+      val relationIdentifier = new RelationIdentifier(table.database, table.identifier.table, "")
+      relationIdentifier.setTablePath(table.storage.properties("tablePath"))
+      relationIdentifier
     }
     dataMapSchema.setParentTables(new util.ArrayList[RelationIdentifier](parentIdents.asJava))
+    dataMapSchema.getRelationIdentifier.setTablePath(tablePath)
     dataMapSchema.getProperties.put("full_refresh", fullRebuild.toString)
     DataMapStoreManager.getInstance().saveDataMapSchema(dataMapSchema)
+    DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
   }
 
   private def validateMVQuery(sparkSession: SparkSession,

@@ -47,4 +47,13 @@ public interface DataMapStatusStorageProvider {
   void updateDataMapStatus(List<DataMapSchema> dataMapSchemas, DataMapStatus dataMapStatus)
       throws IOException;
 
+  /**
+   * Update the sync information in datamap status file, if in case, Insert-Overwrite/Update
+   * operation is progress on a table containing mv datamap
+   *
+   * @param dataMapSchema dataMapSchema on which syncInfo should be updated
+   * @throws IOException
+   */
+  void updateSyncInfo(DataMapSchema dataMapSchema) throws IOException;
+
 }

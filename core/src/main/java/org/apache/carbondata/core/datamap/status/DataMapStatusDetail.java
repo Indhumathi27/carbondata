@@ -17,6 +17,8 @@
 package org.apache.carbondata.core.datamap.status;
 
 import java.io.Serializable;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.carbondata.common.annotations.InterfaceAudience;
 
@@ -31,12 +33,20 @@ public class DataMapStatusDetail implements Serializable {
 
   private DataMapStatus status;
 
+  /**
+   * syncInfo is the map containing the datamap's main table as key and corresponding list of
+   * segment ids as values till which the datamap is synced with main table data
+   */
+  private Map<String, List<String>> syncInfo;
+
   public DataMapStatusDetail() {
   }
 
-  public DataMapStatusDetail(String dataMapName, DataMapStatus status) {
+  public DataMapStatusDetail(String dataMapName, DataMapStatus status,
+      Map<String, List<String>> syncInfo) {
     this.dataMapName = dataMapName;
     this.status = status;
+    this.syncInfo = syncInfo;
   }
 
   public String getDataMapName() {
@@ -57,5 +67,13 @@ public class DataMapStatusDetail implements Serializable {
 
   public void setStatus(DataMapStatus status) {
     this.status = status;
+  }
+
+  public Map<String, List<String>> getSegmentInfo() {
+    return syncInfo;
+  }
+
+  public void setSyncInfo(Map<String, List<String>> syncInfo) {
+    this.syncInfo = syncInfo;
   }
 }
