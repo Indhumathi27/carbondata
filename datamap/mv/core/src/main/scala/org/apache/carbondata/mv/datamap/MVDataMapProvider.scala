@@ -17,10 +17,14 @@
 package org.apache.carbondata.mv.datamap
 
 import java.io.IOException
+import java.util
 
-import org.apache.spark.sql.SparkSession
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+
+import org.apache.spark.sql.{CarbonSession, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
+import org.apache.spark.sql.catalyst.plans.logical.{Join, SubqueryAlias}
 import org.apache.spark.sql.execution.command.management.CarbonLoadDataCommand
 import org.apache.spark.sql.execution.command.table.CarbonDropTableCommand
 import org.apache.spark.sql.execution.datasources.FindDataSourceTable
@@ -29,10 +33,13 @@ import org.apache.spark.sql.util.SparkSQLUtil
 
 import org.apache.carbondata.common.annotations.InterfaceAudience
 import org.apache.carbondata.common.exceptions.sql.MalformedDataMapCommandException
+import org.apache.carbondata.common.logging.LogServiceFactory
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.{DataMapCatalog, DataMapProvider, DataMapStoreManager}
 import org.apache.carbondata.core.datamap.dev.{DataMap, DataMapFactory}
+import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.indexstore.Blocklet
-import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema}
+import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema, RelationIdentifier}
 import org.apache.carbondata.mv.rewrite.{SummaryDataset, SummaryDatasetCatalog}
 
 @InterfaceAudience.Internal
@@ -41,6 +48,9 @@ class MVDataMapProvider(
     sparkSession: SparkSession,
     dataMapSchema: DataMapSchema)
   extends DataMapProvider(mainTable, dataMapSchema) {
+
+  private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
+
   protected var dropTableCommand: CarbonDropTableCommand = null
 
   @throws[MalformedDataMapCommandException]
@@ -91,6 +101,27 @@ class MVDataMapProvider(
       val queryPlan = SparkSQLUtil.execute(
         sparkSession.sql(updatedQuery).queryExecution.analyzed,
         sparkSession).drop("preAgg")
+      var isOverwriteTable = false
+      queryPlan.queryExecution.optimizedPlan transformDown{
+        case join@Join(l1,l2,jointype,condition) =>
+          jointype match {
+            case inner =>
+              if(!setMainTableSegmentsToLoad())
+                return
+            case others =>
+              isOverwriteTable = true
+              others
+          }
+          join
+        case others =>
+          // Set main table segments to load for incremental data loading.
+          // Compare main table segments info with datamap table info and load only newly added
+          // segment from main table to datamap table
+          if (!setMainTableSegmentsToLoad()) {
+            return
+          }
+          others
+      }
       val header = logicalPlan.output.map(_.name).mkString(",")
       val loadCommand = CarbonLoadDataCommand(
         databaseNameOp = Some(identifier.getDatabaseName),
@@ -98,15 +129,104 @@ class MVDataMapProvider(
         factPathFromUser = null,
         dimFilesPath = Seq(),
         options = scala.collection.immutable.Map("fileheader" -> header),
-        isOverwriteTable = true,
+        isOverwriteTable,
         inputSqlString = null,
         dataFrame = Some(queryPlan),
         updateModel = None,
         tableInfoOp = None,
         internalOptions = Map.empty,
         partition = Map.empty)
+      try {
+        SparkSQLUtil.execute(loadCommand, sparkSession)
+      } catch {
+        case ex: Exception =>
+          DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
+          LOGGER.error("Data Load failed for DataMap: ", ex)
+      } finally {
+        unsetMainTableSegments()
+      }
+    }
+  }
 
-      SparkSQLUtil.execute(loadCommand, sparkSession)
+  def isOtherTablesLoaded(relationIdentifiers: mutable.Buffer[RelationIdentifier]): Boolean = {
+    var isLoadedNewSegment = false
+    for (relationIdentifier <- relationIdentifiers) {
+      val (mainTableSegmentList: util.ArrayList[String], datamapTableSegmentList: util
+      .ArrayList[String]) = getSegmentList(relationIdentifier)
+      if (!mainTableSegmentList.equals(datamapTableSegmentList)) {
+        isLoadedNewSegment = true
+      }
+    }
+    isLoadedNewSegment
+  }
+
+  /**
+   * This method will compare mainTable and datamapTable segment List and loads only newly added
+   * segment from main table to datamap table
+   */
+  private def setMainTableSegmentsToLoad(): Boolean = {
+    val relationIdentifiers = dataMapSchema.getParentTables.asScala
+    val isOtherTablesOverLoaded = isOtherTablesLoaded(relationIdentifiers)
+    for (relationIdentifier <- relationIdentifiers) {
+      val (mainTableSegmentList: util.ArrayList[String], datamapTableSegmentList: util
+      .ArrayList[String]) = getSegmentList(relationIdentifier)
+      if (datamapTableSegmentList.isEmpty) {
+        if (mainTableSegmentList.isEmpty) {
+          return false
+        }
+        CarbonSession
+          .threadSet(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+                     relationIdentifier.getDatabaseName + "." +
+                     relationIdentifier.getTableName,
+            mainTableSegmentList.asScala.mkString(","))
+
+      } else {
+        mainTableSegmentList.removeAll(datamapTableSegmentList)
+        if (mainTableSegmentList.isEmpty && isOtherTablesOverLoaded) {
+          CarbonSession
+            .threadSet(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+                       relationIdentifier.getDatabaseName + "." +
+                       relationIdentifier.getTableName, "*")
+        } else if (mainTableSegmentList.isEmpty && !isOtherTablesOverLoaded) {
+          return false
+        } else {
+          CarbonSession
+            .threadSet(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+                       relationIdentifier.getDatabaseName + "." +
+                       relationIdentifier.getTableName,
+              mainTableSegmentList.asScala.mkString(","))
+        }
+      }
+    }
+    true
+  }
+
+  private def getSegmentList(relationIdentifier: RelationIdentifier) = {
+    // As MV datamap can contain multiple parent tables, iterate all parentTables to get main
+    // table segment list
+    val mainTableSegmentList = new util.ArrayList[String](DataMapStatusManager
+      .getSegmentList(relationIdentifier))
+    val datamapTableSegmentList = new util.ArrayList[String]()
+    val dataMapStatusDetails = DataMapStatusManager.readDataMapStatusDetails()
+    for (dataMapStatusDetail <- dataMapStatusDetails) {
+      if (dataMapStatusDetail.getDataMapName.equals(dataMapSchema.getDataMapName)) {
+        datamapTableSegmentList
+          .addAll(dataMapStatusDetail.getSegmentInfo.get(relationIdentifier.getTableName))
+      }
+    }
+    (mainTableSegmentList, datamapTableSegmentList)
+  }
+
+  /**
+   * This method will set all segments for main table after datamap load
+   */
+  private def unsetMainTableSegments(): Unit = {
+    val relationIdentifiers = dataMapSchema.getParentTables.asScala
+    for (relationIdentifier <- relationIdentifiers) {
+      CarbonSession
+        .threadSet(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+                   relationIdentifier.getDatabaseName + "." +
+                   relationIdentifier.getTableName, "*")
     }
   }
 

@@ -27,7 +27,9 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
@@ -40,6 +42,7 @@ import org.apache.carbondata.core.locks.CarbonLockUtil;
 import org.apache.carbondata.core.locks.ICarbonLock;
 import org.apache.carbondata.core.locks.LockUsage;
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
+import org.apache.carbondata.core.metadata.schema.table.RelationIdentifier;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 
@@ -124,13 +127,18 @@ public class DiskBasedDataMapStatusProvider implements DataMapStatusStorageProvi
           for (DataMapStatusDetail statusDetail : dataMapStatusList) {
             if (statusDetail.getDataMapName().equals(dataMapSchema.getDataMapName())) {
               statusDetail.setStatus(dataMapStatus);
+              if (dataMapStatus != DataMapStatus.DISABLED) {
+                statusDetail.setSyncInfo(getSyncInfo(dataMapSchema, true));
+              }
               changedStatusDetails.add(statusDetail);
               exists = true;
             }
           }
+
           if (!exists) {
-            newStatusDetails
-                .add(new DataMapStatusDetail(dataMapSchema.getDataMapName(), dataMapStatus));
+            newStatusDetails.add(
+                new DataMapStatusDetail(dataMapSchema.getDataMapName(), dataMapStatus,
+                    getSyncInfo(dataMapSchema, exists)));
           }
         }
         // Add the newly added datamaps to the list.
@@ -155,6 +163,28 @@ public class DiskBasedDataMapStatusProvider implements DataMapStatusStorageProvi
         CarbonLockUtil.fileUnlock(carbonTableStatusLock, LockUsage.DATAMAP_STATUS_LOCK);
       }
     }
+  }
+
+  /**
+   * Returns details of associated tables information like segment_id
+   * of the main table from the tablestatus file which it synchronized so far.
+   * @param dataMapSchema
+   * @param exists
+   * @return
+   * @throws IOException
+   */
+  private Map<String, List<String>> getSyncInfo(DataMapSchema dataMapSchema, Boolean exists)
+      throws IOException {
+    Map<String, List<String>> syncInfo = new HashMap<>();
+    List<RelationIdentifier> relationIdentifiers = dataMapSchema.getParentTables();
+    for (RelationIdentifier relationIdentifier : relationIdentifiers) {
+      List<String> segmentNo = new ArrayList<>();
+      if (exists) {
+        segmentNo = DataMapStatusManager.getSegmentList(relationIdentifier);
+      }
+      syncInfo.put(relationIdentifier.getTableName(), segmentNo);
+    }
+    return syncInfo;
   }
 
   /**
@@ -196,4 +226,39 @@ public class DiskBasedDataMapStatusProvider implements DataMapStatusStorageProvi
         .getSystemLevelCarbonLockObj(CarbonProperties.getInstance().getSystemFolderLocation(),
             LockUsage.DATAMAP_STATUS_LOCK);
   }
+
+  public void setsyncinfo(DataMapSchema dataMapSchema) throws IOException {
+    DataMapStatusDetail[] dataMapStatusDetails = getDataMapStatusDetails();
+    List<DataMapStatusDetail> dataMapStatusList = Arrays.asList(dataMapStatusDetails);
+    ICarbonLock carbonTableStatusLock = getDataMapStatusLock();
+    for (DataMapStatusDetail statusDetail : dataMapStatusList) {
+      if (statusDetail.getDataMapName().equals(dataMapSchema.getDataMapName())) {
+        Map<String, List<String>> syncInfo = new HashMap<>();
+        List<RelationIdentifier> relationIdentifiers = dataMapSchema.getParentTables();
+        for (RelationIdentifier relationIdentifier : relationIdentifiers) {
+          syncInfo.put(relationIdentifier.getTableName(), new ArrayList<String>());
+        }
+        statusDetail.setSyncInfo(syncInfo);
+      }
+    }
+    boolean locked = false;
+    try {
+      locked = carbonTableStatusLock.lockWithRetries();
+      if (locked) {
+        writeLoadDetailsIntoFile(CarbonProperties.getInstance().getSystemFolderLocation()
+                + CarbonCommonConstants.FILE_SEPARATOR + DATAMAP_STATUS_FILE,
+            dataMapStatusList.toArray(new DataMapStatusDetail[dataMapStatusList.size()]));
+      } else {
+        String errorMsg = "Upadating datamapstatus is failed due to another process taken the lock"
+            + " for updating it";
+        LOG.error(errorMsg);
+        throw new IOException(errorMsg + " Please try after some time.");
+      }
+    } finally {
+      if (locked) {
+        CarbonLockUtil.fileUnlock(carbonTableStatusLock, LockUsage.DATAMAP_STATUS_LOCK);
+      }
+    }
+  }
+
 }

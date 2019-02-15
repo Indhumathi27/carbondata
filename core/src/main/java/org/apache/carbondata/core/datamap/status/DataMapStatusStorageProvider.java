@@ -47,4 +47,7 @@ public interface DataMapStatusStorageProvider {
   void updateDataMapStatus(List<DataMapSchema> dataMapSchemas, DataMapStatus dataMapStatus)
       throws IOException;
 
+
+  void setsyncinfo(DataMapSchema datamapname) throws IOException;
+
 }

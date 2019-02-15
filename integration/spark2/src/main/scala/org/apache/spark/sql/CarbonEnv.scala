@@ -24,6 +24,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.events.{MergeBloomIndexEventListener, MergeIndexEventListener}
 import org.apache.spark.sql.execution.command.cache._
+import org.apache.spark.sql.execution.command.mv.{MVDeleteSegmentByDatePreListener, MVDeleteSegmentByIdPreListener}
 import org.apache.spark.sql.execution.command.preaaggregate._
 import org.apache.spark.sql.execution.command.timeseries.TimeSeriesFunction
 import org.apache.spark.sql.hive._
@@ -161,7 +162,9 @@ object CarbonEnv {
     OperationListenerBus.getInstance()
       .addListener(classOf[LoadTablePreStatusUpdateEvent], LoadPostAggregateListener)
       .addListener(classOf[DeleteSegmentByIdPreEvent], PreAggregateDeleteSegmentByIdPreListener)
+      .addListener(classOf[DeleteSegmentByIdPreEvent], MVDeleteSegmentByIdPreListener)
       .addListener(classOf[DeleteSegmentByDatePreEvent], PreAggregateDeleteSegmentByDatePreListener)
+      .addListener(classOf[DeleteSegmentByDatePreEvent], MVDeleteSegmentByDatePreListener)
       .addListener(classOf[UpdateTablePreEvent], UpdatePreAggregatePreListener)
       .addListener(classOf[DeleteFromTablePreEvent], DeletePreAggregatePreListener)
       .addListener(classOf[DeleteFromTablePreEvent], DeletePreAggregatePreListener)
