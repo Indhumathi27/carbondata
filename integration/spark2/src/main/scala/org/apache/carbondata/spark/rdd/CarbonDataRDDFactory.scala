@@ -946,6 +946,9 @@ object CarbonDataRDDFactory {
       throw new Exception(errorMessage)
     } else {
       DataMapStatusManager.disableAllLazyDataMaps(carbonTable)
+      if(overwriteTable) {
+        DataMapStatusManager.cleanMVdatamap(carbonTable)
+      }
     }
     (done, metadataDetails)
   }

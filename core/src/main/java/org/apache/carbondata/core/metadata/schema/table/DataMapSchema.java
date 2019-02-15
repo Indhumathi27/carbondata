@@ -71,6 +71,13 @@ public class DataMapSchema implements Serializable, Writable {
   protected Map<String, String> properties;
 
   /**
+   * main table column list mapped to datamap table
+   */
+  private Map<String, List<String>> mainTableColumnList;
+
+  private Map<Integer, String> columnsOrderMap;
+
+  /**
    * Identifiers of parent tables
    */
   protected List<RelationIdentifier> parentTables;
@@ -148,6 +155,14 @@ public class DataMapSchema implements Serializable, Writable {
 
   public void setChildSchema(TableSchema childSchema) {
     this.childSchema = childSchema;
+  }
+
+  public void setmainTableColumnList(Map<String, List<String>> mainTableColumnList) {
+    this.mainTableColumnList = mainTableColumnList;
+  }
+
+  public Map<String, List<String>> getmainTableColumnList() {
+    return mainTableColumnList;
   }
 
   /**
@@ -249,5 +264,13 @@ public class DataMapSchema implements Serializable, Writable {
 
   @Override public int hashCode() {
     return Objects.hash(dataMapName);
+  }
+
+  public void setColumnsOrderMap(Map<Integer, String> columnsOrderMap) {
+    this.columnsOrderMap = columnsOrderMap;
+  }
+
+  public Map<Integer, String> getColumnsOrderMap() {
+    return columnsOrderMap;
   }
 }

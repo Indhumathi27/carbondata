@@ -27,9 +27,11 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 
 import org.apache.carbondata.common.logging.LogServiceFactory
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.DataMapStoreManager
 import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema
+import org.apache.carbondata.core.util.ThreadLocalSessionInfo
 import org.apache.carbondata.datamap.DataMapManager
 import org.apache.carbondata.mv.rewrite.{SummaryDataset, SummaryDatasetCatalog}
 
@@ -69,7 +71,7 @@ class MVAnalyzerRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
       DataMapClassProvider.MV.getShortName).asInstanceOf[SummaryDatasetCatalog]
     if (needAnalysis && catalog != null && isValidPlan(plan, catalog)) {
       val modularPlan = catalog.mvSession.sessionState.rewritePlan(plan).withMVTable
-      if (modularPlan.find (_.rewritten).isDefined) {
+      if (modularPlan.find(_.rewritten).isDefined) {
         val compactSQL = modularPlan.asCompactSQL
         val analyzed = sparkSession.sql(compactSQL).queryExecution.analyzed
         analyzed
@@ -82,13 +84,49 @@ class MVAnalyzerRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   }
 
   /**
+   * Check if any segments are set for main table for Query. If any segments are set, then
+   * skip mv datamap table for query
+   * @param datasets
+   * @param catalogs
+   * @return
+   */
+  def isSetMainTableSegments(datasets: Array[SummaryDataset],
+      catalogs: Seq[Option[CatalogTable]]): Boolean = {
+    catalogs.foreach { c =>
+      datasets.foreach { mv =>
+        mv.dataMapSchema.getParentTables.asScala.foreach { relationIdentifier =>
+          if (relationIdentifier.getTableName.equalsIgnoreCase(c.get.identifier.table) &&
+              relationIdentifier.getDatabaseName.equalsIgnoreCase(c.get.database)) {
+            val carbonSessionInfo = ThreadLocalSessionInfo.getCarbonSessionInfo
+            if (carbonSessionInfo != null) {
+              val segmentsToQuery = carbonSessionInfo.getSessionParams
+                .getProperty(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+                             relationIdentifier.getDatabaseName + "." +
+                             relationIdentifier.getTableName, "")
+              if(segmentsToQuery.isEmpty || segmentsToQuery.equalsIgnoreCase("*")) {
+                return true
+              } else {
+                return false
+              }
+            } else {
+              return true
+            }
+          }
+        }
+      }
+    }
+    true
+  }
+
+  /**
    * Whether the plan is valid for doing modular plan matching and datamap replacing.
    */
   def isValidPlan(plan: LogicalPlan, catalog: SummaryDatasetCatalog): Boolean = {
     if (!plan.isInstanceOf[Command]  && !plan.isInstanceOf[DeserializeToObject]) {
       val catalogs = extractCatalogs(plan)
       !isDataMapReplaced(catalog.listAllValidSchema(), catalogs) &&
-      isDataMapExists(catalog.listAllValidSchema(), catalogs)
+      isDataMapExists(catalog.listAllValidSchema(), catalogs) &&
+      isSetMainTableSegments(catalog.listAllValidSchema(), catalogs)
     } else {
       false
     }

@@ -24,21 +24,24 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.sql.{CarbonEnv, CarbonToSparkAdapter, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Cast, Expression, NamedExpression, ScalaUDF, SortOrder}
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan, Project}
-import org.apache.spark.sql.execution.command.{Field, TableModel, TableNewProcessor}
+import org.apache.spark.sql.execution.command.{Field, PartitionerField, TableModel, TableNewProcessor}
+import org.apache.spark.sql.execution.command.datamap.DataMapUtil
 import org.apache.spark.sql.execution.command.table.CarbonCreateTableCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.parser.CarbonSpark2SqlParser
+import org.apache.spark.util.PartitionUtils
 
-import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.core.datamap.DataMapStoreManager
+import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider
-import org.apache.carbondata.core.metadata.schema.table.{DataMapSchema, RelationIdentifier}
+import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema, RelationIdentifier}
 import org.apache.carbondata.datamap.DataMapManager
-import org.apache.carbondata.mv.plans.modular.{GroupBy, Matchable, ModularPlan, Select}
+import org.apache.carbondata.mv.plans.modular.{GroupBy, Matchable, ModularPlan, ModularRelation, Select}
 import org.apache.carbondata.mv.rewrite.{MVPlanWrapper, QueryRewrite, SummaryDatasetCatalog}
 import org.apache.carbondata.spark.util.CommonUtil
 
@@ -57,7 +60,9 @@ object MVHelper {
     val logicalPlan = MVHelper.dropDummFuc(query.queryExecution.analyzed)
     validateMVQuery(sparkSession, logicalPlan)
     val fullRebuild = isFullReload(logicalPlan)
+    var mainTablefields = new util.ArrayList[String]()
     val fields = logicalPlan.output.map { attr =>
+      mainTablefields.add(attr.name)
       val name = updateColumnName(attr)
       val rawSchema = '`' + name + '`' + ' ' + attr.dataType.typeName
       if (attr.dataType.typeName.startsWith("decimal")) {
@@ -78,26 +83,43 @@ object MVHelper {
       }
     }
     val tableProperties = mutable.Map[String, String]()
-    dmProperties.foreach(t => tableProperties.put(t._1, t._2))
 
+    // Get all parent tables
     val selectTables = getTables(logicalPlan)
-    selectTables.foreach { selectTable =>
-      val mainCarbonTable = try {
-        Some(CarbonEnv.getCarbonTable(selectTable.identifier.database,
-          selectTable.identifier.table)(sparkSession))
-      } catch {
-        // Exception handling if it's not a CarbonTable
-        case ex : Exception => None
+    var parentTables: util.List[CarbonTable] = new util.ArrayList[CarbonTable](selectTables.size)
+    parentTables = MVUtil.getAllParentTables(sparkSession, selectTables, parentTables)
+    val fieldRelationMap = MVUtil.getFieldsAndDataMapFieldsFromPlan(
+      logicalPlan, queryString, sparkSession)
+    // If dataMap is mapped to single main table, then inherit table properties from main table
+    if(parentTables.size() ==  1) {
+      DataMapUtil
+        .inheritTablePropertiesFromMainTable(parentTables.get(0),
+          fieldRelationMap.keySet.toSeq,
+          fieldRelationMap,
+          tableProperties)
+    }
+    dmProperties.foreach(t => tableProperties.put(t._1, t._2))
+    tableProperties.put("isMVdatamapTable", "true")
+    val usePartitioning = dmProperties.getOrElse("partitioning", "true").toBoolean
+    var partitionerFields: Seq[PartitionerField] = null
+    var parentTablePartitionColumns = new util.ArrayList[String]()
+    // Get all PartitionInfo from parent tables
+    for (parentTable <- parentTables.asScala) {
+      val parentPartitionColumns = DataMapUtil.getPartitionInfo(usePartitioning, parentTable)
+      parentPartitionColumns.foreach{ parentcolumn =>
+        if(mainTablefields.contains(parentcolumn)) {
+          parentTablePartitionColumns.add(parentcolumn)
+        }
       }
-
-      if (!mainCarbonTable.isEmpty && mainCarbonTable.get.isStreamingSink) {
-        throw new MalformedCarbonCommandException(
-          s"Streaming table does not support creating MV datamap")
+      if (null == partitionerFields) {
+        partitionerFields = PartitionUtils
+          .getPartitionerFields(parentPartitionColumns, fieldRelationMap)
+      } else {
+        partitionerFields = partitionerFields ++
+        PartitionUtils.getPartitionerFields(parentPartitionColumns, fieldRelationMap)
       }
     }
 
-    // TODO inherit the table properties like sort order, sort scope and block size from parent
-    // tables to mv datamap table
     // TODO Use a proper DB
     val tableIdentifier =
     TableIdentifier(dataMapSchema.getDataMapName + "_table",
@@ -108,7 +130,7 @@ object MVHelper {
       new CarbonSpark2SqlParser().convertDbNameToLowerCase(tableIdentifier.database),
       tableIdentifier.table.toLowerCase,
       fields,
-      Seq(),
+      partitionerFields,
       tableProperties,
       None,
       isAlterFlow = false,
@@ -122,19 +144,57 @@ object MVHelper {
     }
     CarbonCreateTableCommand(TableNewProcessor(tableModel),
       tableModel.ifNotExistsSet, Some(tablePath), isVisible = false).run(sparkSession)
+    val table = CarbonEnv.getCarbonTable(tableIdentifier)(sparkSession)
 
+//    val resolvedTable =
+//      sparkSession.sessionState.executePlan(UnresolvedRelation(tableIdentifier)).analyzed
+//    val plan = sparkSession.sessionState.executePlan(resolvedTable).executedPlan
+
+    var order = 0
+    val columnOrderMap = new java.util.HashMap[Integer, String]()
+    fields.foreach { field =>
+      columnOrderMap.put(order, field.column)
+      order += 1
+    }
+    val mainTableToColumnsMap = new java.util.HashMap[String, util.List[String]]()
+    val mainTableFieldIterator = fieldRelationMap.values.asJava.iterator()
+    while (mainTableFieldIterator.hasNext) {
+      val value = mainTableFieldIterator.next()
+      value.columnTableRelationList.foreach {
+        ctrl =>
+          ctrl.foreach {
+            columRelation =>
+              val mainTable = columRelation
+              if (null == mainTableToColumnsMap.get(mainTable.parentTableName)) {
+                val columns = new util.ArrayList[String]()
+                columns.add(mainTable.parentColumnName)
+                mainTableToColumnsMap.put(mainTable.parentTableName, columns)
+              } else {
+                mainTableToColumnsMap.get(mainTable.parentTableName)
+                  .add(mainTable.parentColumnName)
+              }
+          }
+      }
+    }
+
+    dataMapSchema.setmainTableColumnList(mainTableToColumnsMap)
+    dataMapSchema.setColumnsOrderMap(columnOrderMap)
     dataMapSchema.setCtasQuery(queryString)
     dataMapSchema
       .setRelationIdentifier(new RelationIdentifier(tableIdentifier.database.get,
         tableIdentifier.table,
-        ""))
+        CarbonEnv.getCarbonTable(tableIdentifier)(sparkSession).getTableId))
 
     val parentIdents = selectTables.map { table =>
-      new RelationIdentifier(table.database, table.identifier.table, "")
+      val relationIdentifier = new RelationIdentifier(table.database, table.identifier.table, "")
+      relationIdentifier.setTablePath(table.storage.properties("tablePath"))
+      relationIdentifier
     }
     dataMapSchema.setParentTables(new util.ArrayList[RelationIdentifier](parentIdents.asJava))
+    dataMapSchema.getRelationIdentifier.setTablePath(tablePath)
     dataMapSchema.getProperties.put("full_refresh", fullRebuild.toString)
     DataMapStoreManager.getInstance().saveDataMapSchema(dataMapSchema)
+    DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
   }
 
   private def validateMVQuery(sparkSession: SparkSession,
@@ -413,7 +473,8 @@ object MVHelper {
       case s: Select if s.dataMapTableRelation.isDefined =>
         val relation =
           s.dataMapTableRelation.get.asInstanceOf[MVPlanWrapper].plan.asInstanceOf[Select]
-        val mappings = s.outputList zip relation.outputList
+        val outputList = getUpdatedOutputList(relation.outputList, s.dataMapTableRelation)
+        val mappings = s.outputList zip outputList
         val oList = for ((o1, o2) <- mappings) yield {
           if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
         }
@@ -422,7 +483,8 @@ object MVHelper {
         val relation =
           g.dataMapTableRelation.get.asInstanceOf[MVPlanWrapper].plan.asInstanceOf[Select]
         val in = relation.asInstanceOf[Select].outputList
-        val mappings = g.outputList zip relation.outputList
+        val outputList = getUpdatedOutputList(relation.outputList, g.dataMapTableRelation)
+        val mappings = g.outputList zip outputList
         val oList = for ((left, right) <- mappings) yield {
           left match {
             case Alias(agg@AggregateExpression(fun@Sum(child), _, _, _), name) =>
@@ -473,7 +535,8 @@ object MVHelper {
               relation,
               aliasMap)
             if (isFullRefresh(g.dataMapTableRelation.get.asInstanceOf[MVPlanWrapper])) {
-              val mappings = g.outputList zip relation.outputList
+              val outputList = getUpdatedOutputList(relation.outputList, g.dataMapTableRelation)
+              val mappings = g.outputList zip outputList
               val oList = for ((o1, o2) <- mappings) yield {
                 if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
               }
@@ -502,6 +565,7 @@ object MVHelper {
               }
               val child = updateDataMap(g, rewrite).asInstanceOf[Matchable]
               // Get the outList from converted child outList using already selected indices
+//              val outputList = getUpdatedOutputList(select.outputList, g.dataMapTableRelation)
               val outputSel =
                 indices.map(child.outputList(_)).zip(select.outputList).map { case (l, r) =>
                   l match {
@@ -607,5 +671,30 @@ object MVHelper {
       rewrittenPlan
     }
   }
+
+  private def getUpdatedOutputList(outputList: Seq[NamedExpression],
+      dataMapTableRelation: Option[ModularPlan]): Seq[NamedExpression] = {
+    var dataMapSchema: DataMapSchema = new DataMapSchema()
+    dataMapTableRelation.collect {
+      case mv: MVPlanWrapper =>
+        dataMapSchema = mv.dataMapSchema
+      case _ =>
+    }
+    val columnsOrderMap = dataMapSchema.getColumnsOrderMap
+    if (null != columnsOrderMap && !columnsOrderMap.isEmpty) {
+      val updatedOutputList = new util.ArrayList[NamedExpression]()
+      var i = 0
+      while (i < columnsOrderMap.size()) {
+        updatedOutputList
+          .add(outputList.filter(f => f.name.equalsIgnoreCase(columnsOrderMap.get(i))).head)
+        i = i + 1
+      }
+      updatedOutputList.asScala
+
+    } else {
+      outputList
+    }
+  }
+
 }
 

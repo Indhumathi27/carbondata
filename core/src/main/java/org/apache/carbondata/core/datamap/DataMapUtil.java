@@ -159,4 +159,10 @@ public class DataMapUtil {
     return ssm.getValidAndInvalidSegments();
   }
 
+  public static Boolean isMVdatamapTable(CarbonTable carbonTable) {
+    String isMVdatamapTable =
+        carbonTable.getTableInfo().getFactTable().getTableProperties().get("isMVdatamapTable");
+    return (isMVdatamapTable != null && Boolean.valueOf(isMVdatamapTable).equals(true));
+  }
+
 }

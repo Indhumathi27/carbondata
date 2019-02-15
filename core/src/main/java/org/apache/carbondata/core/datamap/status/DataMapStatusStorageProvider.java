@@ -20,6 +20,8 @@ import java.io.IOException;
 import java.util.List;
 
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
+import org.apache.carbondata.core.metadata.schema.table.RelationIdentifier;
+import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 
 /**
  * It updates the datamap status to the storage. It will have 2 implementations one will be disk
@@ -46,5 +48,61 @@ public interface DataMapStatusStorageProvider {
    */
   void updateDataMapStatus(List<DataMapSchema> dataMapSchemas, DataMapStatus dataMapStatus)
       throws IOException;
+
+  /**
+   * It reads and returns datamap to main tables segment status map details for given dataMapSchema
+   *
+   * @param dataMapSchema
+   * @throws IOException
+   */
+  DataMapSegmentStatusDetail getDataMapSegmentStatus(DataMapSchema dataMapSchema)
+      throws IOException;
+
+  /**
+   * Updates the datamap segment status map after rebuild to MV datamap
+   *
+   * @param dataMapSchema
+   * @throws IOException
+   */
+  void updateSegmentMapping(DataMapSchema dataMapSchema) throws IOException;
+
+  /**
+   * Clears datamap segment status map and delete datamapSegmentStatus file when MV
+   * datamap is dropped
+   *
+   * @param dataMapSchema
+   * @throws IOException
+   */
+  void deleteSegmentStatusFile(DataMapSchema dataMapSchema) throws IOException;
+
+  /**
+   * Remove all entries from datamapSegmentStatus file in case of Insert-OverWrite/Update Operation
+   * on main table
+   *
+   * @param dataMapSchema
+   * @throws IOException
+   */
+  void clearSegmentMapping(DataMapSchema dataMapSchema) throws IOException;
+
+  /**
+   * Reads dataMapSegmentStatusMap and returns list of segments of mainTable which are
+   * already loaded to MV datamap
+   *
+   * @param dataMapSegmentStatus
+   * @param relationIdentifier
+   * @return
+   */
+  List<String> getDataMapSegmentsFromMapping(DataMapSegmentStatusDetail dataMapSegmentStatus,
+      RelationIdentifier relationIdentifier);
+
+  /**
+   * Update dataMapSegmentStatusMap if datamap table is compacted
+   *
+   * @param dataMapSchema
+   * @param loadMetadataDetails
+   * @throws IOException
+   */
+  void updateMappingAfterCompaction(DataMapSchema dataMapSchema,
+      LoadMetadataDetails[] loadMetadataDetails) throws IOException;
 
 }
