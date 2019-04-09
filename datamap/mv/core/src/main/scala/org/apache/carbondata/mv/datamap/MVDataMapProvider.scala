@@ -40,6 +40,7 @@ import org.apache.carbondata.core.datamap.dev.{DataMap, DataMapFactory}
 import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.indexstore.Blocklet
 import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema, RelationIdentifier}
+import org.apache.carbondata.core.util.ThreadLocalSessionInfo
 import org.apache.carbondata.mv.rewrite.{SummaryDataset, SummaryDatasetCatalog}
 
 @InterfaceAudience.Internal
@@ -150,15 +151,15 @@ class MVDataMapProvider(
     val relationIdentifiers = dataMapSchema.getParentTables.asScala
     for (relationIdentifier <- relationIdentifiers) {
       val (mainTableSegmentList, datamapTableSegmentList) = getSegmentList(relationIdentifier)
-      mainTableSegmentList.removeAll(datamapTableSegmentList)
-      if (mainTableSegmentList.isEmpty) {
-        return false
-      }
-      CarbonSession
-        .threadSet(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
-                   relationIdentifier.getDatabaseName + "." +
-                   relationIdentifier.getTableName,
-          mainTableSegmentList.asScala.mkString(","))
+        mainTableSegmentList.removeAll(datamapTableSegmentList)
+        if (mainTableSegmentList.isEmpty) {
+          return false
+        }
+        CarbonSession
+          .threadSet(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+                     relationIdentifier.getDatabaseName + "." +
+                     relationIdentifier.getTableName,
+            mainTableSegmentList.asScala.mkString(","))
     }
     true
   }
@@ -187,9 +188,9 @@ class MVDataMapProvider(
     val relationIdentifiers = dataMapSchema.getParentTables.asScala
     for (relationIdentifier <- relationIdentifiers) {
       CarbonSession
-        .threadSet(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+        .threadUnset(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
                    relationIdentifier.getDatabaseName + "." +
-                   relationIdentifier.getTableName, "*")
+                   relationIdentifier.getTableName)
     }
   }
 

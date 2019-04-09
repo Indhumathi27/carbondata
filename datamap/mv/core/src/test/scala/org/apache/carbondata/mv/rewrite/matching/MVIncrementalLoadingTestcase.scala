@@ -22,8 +22,8 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
-import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.core.datamap.status.DataMapStatusManager
+import org.apache.carbondata.spark.exception.ProcessMetaDataException
 
 
 /**
@@ -336,9 +336,49 @@ class MVIncrementalLoadingTestcase extends QueryTest with BeforeAndAfterAll {
     sql("drop datamap if exists p1")
     sql("create datamap p1 on table par_table using 'mv' as select city, id from par_table")
     sql("rebuild datamap p1")
-    intercept[UnsupportedOperationException] {
+    intercept[ProcessMetaDataException] {
       sql("alter table par_table drop partition (city='shenzhen')")
     }
+  }
+
+  test("test set segments with main table having mv datamap") {
+    sql("drop table IF EXISTS main_table")
+    sql("drop table IF EXISTS test_table")
+    sql("create table main_table(a string,b string,c int) stored by 'carbondata'")
+    sql("insert into main_table values('a','abc',1)")
+    sql("insert into main_table values('b','bcd',2)")
+    sql("create table test_table(a string,b string,c int) stored by 'carbondata'")
+    sql("insert into test_table values('a','abc',1)")
+    sql("insert into test_table values('b','bcd',2)")
+    sql("drop datamap if exists datamap_mt")
+    sql(
+      "create datamap datamap_mt using 'mv' as select a, sum(b) from main_table  group by a")
+    sql(s"rebuild datamap datamap_mt")
+    checkAnswer(sql("select a, sum(b) from main_table  group by a"),
+      sql("select a, sum(b) from test_table  group by a"))
+    sql("SET carbon.input.segments.default.main_table = 1")
+    sql("SET carbon.input.segments.default.test_table=1")
+    checkAnswer(sql("select a, sum(b) from main_table  group by a"),
+      sql("select a, sum(b) from test_table  group by a"))
+    sql("drop table IF EXISTS main_table")
+    sql("drop table IF EXISTS test_table")
+  }
+
+
+  test("test set segments with main table having mv datamap before rebuild") {
+    sql("drop table IF EXISTS main_table")
+    sql("create table main_table(a string,b string,c int) stored by 'carbondata'")
+    sql("insert into main_table values('a','abc',1)")
+    sql("insert into main_table values('b','bcd',2)")
+    sql("drop datamap if exists datamap")
+    sql(
+      "create datamap datamap using 'mv' as select a, sum(b) from main_table  group by a")
+    sql("SET carbon.input.segments.default.main_table=1")
+    sql(s"rebuild datamap datamap")
+    sql("select a, sum(b) from main_table  group by a").show(false)
+    sql("select * from datamap_table").show(false)
+    sql("reset")
+    sql("select a, sum(b) from main_table  group by a").show(false)
   }
 
   def verifyMVDataMap(logicalPlan: LogicalPlan, dataMapName: String): Boolean = {

@@ -81,6 +81,8 @@ object MVHelper {
     val tableProperties = mutable.Map[String, String]()
     dmProperties.foreach(t => tableProperties.put(t._1, t._2))
 
+
+
     tableProperties.put("isMVdatamapTable", "true")
 
     val selectTables = getTables(logicalPlan)

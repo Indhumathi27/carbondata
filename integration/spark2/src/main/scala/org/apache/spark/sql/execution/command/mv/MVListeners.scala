@@ -34,7 +34,7 @@ object MVListeners {
         dataMapSchema.getRelationIdentifier.getTablePath,
         dataMapSchema.getRelationIdentifier.getTableId)
     val listOfColumns = datamapTable.getTableInfo.getFactTable.getListOfColumns.asScala
-      .map(f => f.getColumnName.substring(f.getColumnName.indexOf("_") + 1))
+      .map(f => f.getColumnName.substring(f.getColumnName.lastIndexOf("_") + 1))
     listOfColumns
   }
 
@@ -170,6 +170,39 @@ object MVChangeDataTypeorRenameColumnPreListener extends OperationEventListener 
         s"Cannot change data type or rename column for columns present in mv datamap table ${
           carbonTable.getDatabaseName
         }.${ carbonTable.getTableName }")
+    }
+  }
+}
+
+
+object MVAlterTableDropPartitionMetaListener extends OperationEventListener {
+  /**
+   * Called on a specified event occurrence
+   *
+   * @param event
+   * @param operationContext
+   */
+  override def onEvent(event: Event, operationContext: OperationContext): Unit = {
+    val dropPartitionEvent = event.asInstanceOf[AlterTableDropPartitionMetaEvent]
+    val parentCarbonTable = dropPartitionEvent.parentCarbonTable
+    val partitionsToBeDropped = dropPartitionEvent.specs.flatMap(_.keys)
+    if (CarbonTable.hasMVDataMap(parentCarbonTable)) {
+      val dataMapSchemaList = DataMapStoreManager.getInstance
+        .getDataMapSchemasOfTable(parentCarbonTable).asScala
+      for (dataMapSchema <- dataMapSchemaList) {
+        if (dataMapSchema.getProviderName.equalsIgnoreCase(DataMapClassProvider.MV.getShortName)) {
+          val listOfColumns = MVListeners.getDataMapTableColumns(dataMapSchema)
+          val columnExistsInChild = listOfColumns.collectFirst {
+            case parentColumnName if partitionsToBeDropped.contains(parentColumnName) =>
+              parentColumnName
+          }
+          if (columnExistsInChild.isDefined) {
+            throw new UnsupportedOperationException(
+              s"Column $partitionsToBeDropped exists in a MV datamap. Drop MV datamap to " +
+              s"continue")
+          }
+        }
+      }
     }
   }
 }

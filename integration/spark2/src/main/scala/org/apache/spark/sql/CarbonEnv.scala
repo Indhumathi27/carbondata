@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.events.{MergeBloomIndexEventListener, MergeIndexEventListener}
 import org.apache.spark.sql.execution.command.cache._
-import org.apache.spark.sql.execution.command.mv.{MVAddColumnsPreListener, MVChangeDataTypeorRenameColumnPreListener, MVDeleteSegmentPreListener, MVDropColumnPreListener}
+import org.apache.spark.sql.execution.command.mv.{MVAddColumnsPreListener, MVAlterTableDropPartitionMetaListener, MVChangeDataTypeorRenameColumnPreListener, MVDeleteSegmentPreListener, MVDropColumnPreListener}
 import org.apache.spark.sql.execution.command.preaaggregate._
 import org.apache.spark.sql.execution.command.timeseries.TimeSeriesFunction
 import org.apache.spark.sql.hive._
@@ -189,6 +189,7 @@ object CarbonEnv {
       .addListener(classOf[AlterTableDropPartitionPostStatusEvent],
         AlterTableDropPartitionPostStatusListener)
       .addListener(classOf[AlterTableDropPartitionMetaEvent], AlterTableDropPartitionMetaListener)
+      .addListener(classOf[AlterTableDropPartitionMetaEvent], MVAlterTableDropPartitionMetaListener)
       .addListener(classOf[LoadTablePostExecutionEvent], new MergeIndexEventListener)
       .addListener(classOf[AlterTableCompactionPostEvent], new MergeIndexEventListener)
       .addListener(classOf[AlterTableMergeIndexEvent], new MergeIndexEventListener)

@@ -27,9 +27,11 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 
 import org.apache.carbondata.common.logging.LogServiceFactory
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.DataMapStoreManager
 import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema
+import org.apache.carbondata.core.util.ThreadLocalSessionInfo
 import org.apache.carbondata.datamap.DataMapManager
 import org.apache.carbondata.mv.rewrite.{SummaryDataset, SummaryDatasetCatalog}
 
@@ -81,6 +83,34 @@ class MVAnalyzerRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
     }
   }
 
+  def isSetMainTableSegments(datasets: Array[SummaryDataset],
+      catalogs: Seq[Option[CatalogTable]]): Boolean = {
+    catalogs.foreach { c =>
+      datasets.foreach { mv =>
+        mv.dataMapSchema.getParentTables.asScala.foreach { relationIdentifier =>
+          if (relationIdentifier.getTableName.equalsIgnoreCase(c.get.identifier.table) &&
+              relationIdentifier.getDatabaseName.equalsIgnoreCase(c.get.database)) {
+            val carbonSessionInfo = ThreadLocalSessionInfo.getCarbonSessionInfo
+            if (carbonSessionInfo != null) {
+              val segmentsToQuery = carbonSessionInfo.getSessionParams
+                .getProperty(CarbonCommonConstants.CARBON_INPUT_SEGMENTS +
+                             relationIdentifier.getDatabaseName + "." +
+                             relationIdentifier.getTableName, "")
+              if(segmentsToQuery.isEmpty || segmentsToQuery.equalsIgnoreCase("*")) {
+                return true
+              } else {
+                return false
+              }
+            } else {
+              return true
+            }
+          }
+        }
+      }
+    }
+    true
+  }
+
   /**
    * Whether the plan is valid for doing modular plan matching and datamap replacing.
    */
@@ -88,7 +118,8 @@ class MVAnalyzerRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
     if (!plan.isInstanceOf[Command]  && !plan.isInstanceOf[DeserializeToObject]) {
       val catalogs = extractCatalogs(plan)
       !isDataMapReplaced(catalog.listAllValidSchema(), catalogs) &&
-      isDataMapExists(catalog.listAllValidSchema(), catalogs)
+      isDataMapExists(catalog.listAllValidSchema(), catalogs) &&
+      isSetMainTableSegments(catalog.listAllValidSchema(), catalogs)
     } else {
       false
     }
