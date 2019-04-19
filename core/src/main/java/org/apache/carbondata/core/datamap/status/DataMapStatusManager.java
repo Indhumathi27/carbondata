@@ -23,9 +23,19 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.carbondata.common.exceptions.sql.NoSuchDataMapException;
+import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.datamap.DataMapStoreManager;
+import org.apache.carbondata.core.locks.ICarbonLock;
+import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
+import org.apache.carbondata.core.metadata.schema.table.RelationIdentifier;
+import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
+import org.apache.carbondata.core.statusmanager.SegmentStatus;
+import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
+import org.apache.carbondata.core.util.path.CarbonTablePath;
+
+import org.apache.log4j.Logger;
 
 /**
  * Maintains the status of each datamap. As per the status query will decide whether to hit datamap
@@ -37,6 +47,9 @@ public class DataMapStatusManager {
   private DataMapStatusManager() {
 
   }
+
+  private static final Logger LOGGER =
+      LogServiceFactory.getLogService(DataMapStatusManager.class.getName());
 
   /**
    * TODO Use factory when we have more storage providers
@@ -122,9 +135,57 @@ public class DataMapStatusManager {
     }
   }
 
-  private static DataMapSchema getDataMapSchema(String dataMapName)
+  public static DataMapSchema getDataMapSchema(String dataMapName)
       throws IOException, NoSuchDataMapException {
     return DataMapStoreManager.getInstance().getDataMapSchema(dataMapName);
   }
 
+  /**
+   * This method will remove all segments of dataMap table in case of Insert-Overwrite/Update/Delete
+   * operations on main table
+   *
+   * @param allDataMapSchemas of main carbon table
+   * @throws IOException
+   */
+  public static void truncateDataMap(List<DataMapSchema> allDataMapSchemas) throws IOException {
+    for (DataMapSchema datamapschema : allDataMapSchemas) {
+      RelationIdentifier dataMapRelationIdentifier = datamapschema.getRelationIdentifier();
+      SegmentStatusManager segmentStatusManager = new SegmentStatusManager(AbsoluteTableIdentifier
+          .from(dataMapRelationIdentifier.getTablePath(),
+              dataMapRelationIdentifier.getDatabaseName(),
+              dataMapRelationIdentifier.getTableName()));
+      ICarbonLock carbonLock = segmentStatusManager.getTableStatusLock();
+      try {
+        if (carbonLock.lockWithRetries()) {
+          LOGGER.info("Acquired lock for table" + dataMapRelationIdentifier.getDatabaseName() + "."
+              + dataMapRelationIdentifier.getTableName() + " for table status updation");
+          String metaDataPath =
+              CarbonTablePath.getMetadataPath(dataMapRelationIdentifier.getTablePath());
+          LoadMetadataDetails[] loadMetadataDetails =
+              SegmentStatusManager.readLoadMetadata(metaDataPath);
+          for (LoadMetadataDetails entry : loadMetadataDetails) {
+            entry.setSegmentStatus(SegmentStatus.MARKED_FOR_DELETE);
+          }
+          SegmentStatusManager.writeLoadDetailsIntoFile(
+              CarbonTablePath.getTableStatusFilePath(dataMapRelationIdentifier.getTablePath()),
+              loadMetadataDetails);
+        } else {
+          LOGGER.error("Not able to acquire the lock for Table status updation for table "
+              + dataMapRelationIdentifier.getDatabaseName() + "." + dataMapRelationIdentifier
+              .getTableName());
+        }
+      } finally {
+        if (carbonLock.unlock()) {
+          LOGGER.info(
+              "Table unlocked successfully after table status updation" + dataMapRelationIdentifier
+                  .getDatabaseName() + "." + dataMapRelationIdentifier.getTableName());
+        } else {
+          LOGGER.error(
+              "Unable to unlock Table lock for table" + dataMapRelationIdentifier.getDatabaseName()
+                  + "." + dataMapRelationIdentifier.getTableName()
+                  + " during table status updation");
+        }
+      }
+    }
+  }
 }

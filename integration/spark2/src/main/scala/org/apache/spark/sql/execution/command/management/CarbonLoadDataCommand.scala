@@ -809,7 +809,9 @@ case class CarbonLoadDataCommand(
         carbonLoadModel.setFactTimeStamp(System.currentTimeMillis())
       }
       // Create and ddd the segment to the tablestatus.
-      CarbonLoaderUtil.readAndUpdateLoadProgressInTableMeta(carbonLoadModel, isOverwriteTable)
+      CarbonLoaderUtil
+        .readAndUpdateLoadProgressInTableMeta(carbonLoadModel,
+          isOverwriteTable)
       val convertRelation = convertToLogicalRelation(
         catalogTable,
         sizeInBytes,

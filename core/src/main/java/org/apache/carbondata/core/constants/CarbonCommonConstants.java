@@ -2124,4 +2124,14 @@ public final class CarbonCommonConstants {
    */
   public static final String CARBON_QUERY_DATAMAP_BLOOM_CACHE_SIZE_DEFAULT_VAL = "512";
 
+  /**
+   * This property will be used to store datamap name
+   */
+  public static final String DATAMAP_NAME = "datamap_name";
+
+  /**
+   * This property will be used to store parentable name's associated with datamap
+   */
+  public static final String PARENT_TABLES = "parent_tables";
+
 }
