@@ -271,7 +271,7 @@ class MVIncrementalLoadingTestcase extends QueryTest with BeforeAndAfterAll {
     sql("create table sales (product string, quantity int) stored by 'carbondata'")
     sql(s"load data INPATH '$resourcesPath/sales_data.csv' into table sales")
     sql("drop datamap if exists innerjoin")
-    sql("Create datamap innerjoin using 'mv'  with deferred rebuild as Select p.product, p.amount, s.quantity from " +
+    sql("Create datamap innerjoin using 'mv'  with deferred rebuild as Select p.product, p.amount, s.quantity, s.product from " +
         "products p, sales s where p.product=s.product")
     sql("drop table if exists products1")
     sql("create table products1 (product string, amount int) stored by 'carbondata' ")

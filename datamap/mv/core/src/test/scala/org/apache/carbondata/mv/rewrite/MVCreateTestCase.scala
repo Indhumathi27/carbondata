@@ -180,7 +180,7 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
   }
 
   test("test create datamap with simple and same projection with datamap filter on non projection column and extra column filter") {
-    sql("create datamap datamap9 using 'mv' as select empname, designation from fact_table1 where deptname='cloud'")
+    sql("create datamap datamap9 using 'mv' as select empname, designation,deptname  from fact_table1 where deptname='cloud'")
     val frame = sql("select empname,designation from fact_table1 where deptname='cloud'")
     val analyzed = frame.queryExecution.analyzed
     assert(verifyMVDataMap(analyzed, "datamap9"))
@@ -189,7 +189,8 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
   }
 
   test("test create datamap with simple and same projection with datamap filter on non projection column and no column filter") {
-    sql("create datamap datamap10 using 'mv' as select empname, designation from fact_table1 where deptname='cloud'")
+    sql("create datamap datamap10 using 'mv' as select empname, designation,deptname from fact_table1 where deptname='cloud'")
+    sql(s"rebuild datamap datamap10")
     val frame = sql("select empname,designation from fact_table1")
     val analyzed = frame.queryExecution.analyzed
     assert(!verifyMVDataMap(analyzed, "datamap10"))
@@ -198,7 +199,7 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
   }
 
   test("test create datamap with simple and same projection with datamap filter on non projection column and different column filter") {
-    sql("create datamap datamap11 using 'mv' as select empname, designation from fact_table1 where deptname='cloud'")
+    sql("create datamap datamap11 using 'mv' as select empname, designation,deptname from fact_table1 where deptname='cloud'")
     val frame = sql("select empname,designation from fact_table1 where designation='SA'")
     val analyzed = frame.queryExecution.analyzed
     assert(!verifyMVDataMap(analyzed, "datamap11"))
@@ -327,7 +328,7 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
 
   test("test create datamap with simple join and filter on query") {
     sql("drop datamap if exists datamap22")
-    sql("create datamap datamap22 using 'mv' as select t1.empname, t2.designation from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname)")
+    sql("create datamap datamap22 using 'mv' as select t1.empname, t2.designation, t2.empname from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname)")
     val frame = sql(
       "select t1.empname, t2.designation from fact_table1 t1,fact_table2 t2 where t1.empname = " +
       "t2.empname and t1.empname='shivani'")
@@ -341,7 +342,7 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
 
   test("test create datamap with simple join and filter on query and datamap") {
     sql("drop datamap if exists datamap23")
-    sql("create datamap datamap23 using 'mv' as select t1.empname, t2.designation from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname) where t1.empname='shivani'")
+    sql("create datamap datamap23 using 'mv' as select t1.empname, t2.designation,t2.empname from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname) where t1.empname='shivani'")
     val frame = sql(
       "select t1.empname, t2.designation from fact_table1 t1,fact_table2 t2 where t1.empname = " +
       "t2.empname and t1.empname='shivani'")
@@ -354,7 +355,7 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
 
   test("test create datamap with simple join and filter on datamap and no filter on query") {
     sql("drop datamap if exists datamap24")
-    sql("create datamap datamap24 using 'mv' as select t1.empname, t2.designation from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname) where t1.empname='shivani'")
+    sql("create datamap datamap24 using 'mv' as select t1.empname, t2.designation,t2.empname from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname) where t1.empname='shivani'")
     val frame = sql(
       "select t1.empname, t2.designation from fact_table1 t1,fact_table2 t2 where t1.empname = t2.empname")
     val analyzed = frame.queryExecution.analyzed
@@ -365,7 +366,7 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
 
   test("test create datamap with multiple join") {
     sql("drop datamap if exists datamap25")
-    sql("create datamap datamap25 using 'mv' as select t1.empname as c1, t2.designation from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname) inner join fact_table3 t3  on (t1.empname=t3.empname)")
+    sql("create datamap datamap25 using 'mv' as select t1.empname as c1, t2.designation,t2.empname,t3.empname from fact_table1 t1 inner join fact_table2 t2 on (t1.empname = t2.empname) inner join fact_table3 t3  on (t1.empname=t3.empname)")
     val frame = sql(
       "select t1.empname as c1, t2.designation from fact_table1 t1,fact_table2 t2 where t1.empname = t2.empname")
     val analyzed = frame.queryExecution.analyzed
@@ -649,7 +650,6 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
   }
 
   test("jira carbondata-2528-2") {
-
     sql("drop datamap if exists MV_order")
     sql("drop datamap if exists MV_desc_order")
     sql("create datamap MV_order using 'mv' as select empname,sum(salary)+sum(utilization) as total from fact_table1 group by empname")
@@ -909,7 +909,7 @@ class MVCreateTestCase extends QueryTest with BeforeAndAfterAll {
       """.stripMargin)
     
     val exception_tb_mv2: Exception = intercept[Exception] {
-      sql("create datamap dm_stream_test2 using 'mv' as select t1.empname as c1, t2.designation, " +
+      sql("create datamap dm_stream_test2 using 'mv' as select t1.empname as c1, t2.designation,t3.empname, " +
           "t2.empname as c2 from (fact_table1 t1 inner join fact_streaming_table2 t2  " +
           "on (t1.empname = t2.empname)) inner join fact_table_parquet t3 " +
           "on (t1.empname = t3.empname)")

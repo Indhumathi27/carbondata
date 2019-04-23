@@ -2134,4 +2134,9 @@ public final class CarbonCommonConstants {
    */
   public static final String PARENT_TABLES = "parent_tables";
 
+  /*
+   * This property will be used to check if carbonTable is MV datamap table or not
+   */
+  public static final String IS_MV_DATAMAP_TABLE = "false";
+
 }

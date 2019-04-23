@@ -141,7 +141,8 @@ class MVDataMapProvider(
         dataFrame = Some(queryPlan),
         updateModel = None,
         tableInfoOp = None,
-        internalOptions = Map("mergedSegmentName" -> newLoadName),
+        internalOptions = Map("mergedSegmentName" -> newLoadName,
+          CarbonCommonConstants.IS_INTERNAL_LOAD_CALL -> "true"),
         partition = Map.empty)
 
       try {

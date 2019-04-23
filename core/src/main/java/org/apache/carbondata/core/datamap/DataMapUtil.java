@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datamap.dev.expr.DataMapExprWrapper;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.indexstore.ExtendedBlocklet;
@@ -180,4 +181,15 @@ public class DataMapUtil {
     }
     return segmentList;
   }
+
+  /**
+   * ==
+   * Check if carbonTable is mv datamap table
+   */
+  public static Boolean isMVdatamapTable(CarbonTable carbonTable) {
+    String isMVdatamapTable = carbonTable.getTableInfo().getFactTable().getTableProperties()
+        .get(CarbonCommonConstants.IS_MV_DATAMAP_TABLE);
+    return (isMVdatamapTable != null && Boolean.valueOf(isMVdatamapTable));
+  }
+
 }

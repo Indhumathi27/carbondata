@@ -22,6 +22,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -79,6 +80,11 @@ public class DataMapSchema implements Serializable, Writable {
    * child table schema
    */
   protected TableSchema childSchema;
+
+  /**
+   * main table column list mapped to datamap table
+   */
+  private Map<String, HashSet<String>> mainTableColumnList;
 
   public DataMapSchema(String dataMapName, String providerName) {
     this.dataMapName = dataMapName;
@@ -249,5 +255,13 @@ public class DataMapSchema implements Serializable, Writable {
 
   @Override public int hashCode() {
     return Objects.hash(dataMapName);
+  }
+
+  public Map<String, HashSet<String>> getMainTableColumnList() {
+    return mainTableColumnList;
+  }
+
+  public void setMainTableColumnList(Map<String, HashSet<String>> mainTableColumnList) {
+    this.mainTableColumnList = mainTableColumnList;
   }
 }
