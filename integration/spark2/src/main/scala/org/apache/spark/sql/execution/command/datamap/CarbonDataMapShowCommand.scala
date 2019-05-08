@@ -28,6 +28,7 @@ import org.apache.spark.sql.execution.command.{Checker, DataCommand}
 import org.apache.spark.sql.types.StringType
 
 import org.apache.carbondata.core.datamap.DataMapStoreManager
+import org.apache.carbondata.core.datamap.status.{DataMapStatus, DataMapStatusManager}
 import org.apache.carbondata.core.metadata.schema.datamap.{DataMapClassProvider, DataMapProperty}
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema
 
@@ -43,7 +44,8 @@ case class CarbonDataMapShowCommand(tableIdentifier: Option[TableIdentifier])
     Seq(AttributeReference("DataMapName", StringType, nullable = false)(),
       AttributeReference("ClassName", StringType, nullable = false)(),
       AttributeReference("Associated Table", StringType, nullable = false)(),
-      AttributeReference("DataMap Properties", StringType, nullable = false)())
+      AttributeReference("DataMap Properties", StringType, nullable = false)(),
+      AttributeReference("DataMap Status", StringType, nullable = false)())
   }
 
   override def processData(sparkSession: SparkSession): Seq[Row] = {
@@ -92,7 +94,19 @@ case class CarbonDataMapShowCommand(tableIdentifier: Option[TableIdentifier])
               .map(p => s"'${ p._1 }'='${ p._2 }'").toSeq
               .sorted.mkString(", ")
           }
-        Row(s.getDataMapName, s.getProviderName, table, dmPropertieStr)
+          val dataMapStatus =
+            if (!s.getProviderName.equalsIgnoreCase(
+              DataMapClassProvider.PREAGGREGATE.getShortName) || s.isIndexDataMap) {
+              if (DataMapStatusManager.getEnabledDataMapStatusDetails
+                .exists(_.getDataMapName.equalsIgnoreCase(s.getDataMapName))) {
+                DataMapStatus.ENABLED.name()
+              } else {
+                DataMapStatus.DISABLED.name()
+              }
+            } else {
+              ""
+            }
+        Row(s.getDataMapName, s.getProviderName, table, dmPropertieStr, dataMapStatus)
       }
     } else {
       Seq.empty
