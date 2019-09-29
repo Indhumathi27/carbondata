@@ -605,7 +605,7 @@ object CommitPreAggregateListener extends OperationEventListener with CommitHelp
       operationContext.getProperty("isCompaction")).getOrElse("false").toString.toBoolean
     val dataMapSchemas =
       carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.getTableInfo.getDataMapSchemaList
-      .asScala.filter(_.getChildSchema != null)
+      .asScala.filter(_.getChildSchema != null).filter(_.getRelationIdentifier == null)
     // extract all child LoadCommands
     val childLoadCommands = if (!isCompactionFlow) {
       // If not compaction flow then the key for load commands will be tableName

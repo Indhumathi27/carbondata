@@ -51,6 +51,8 @@ class MVDataMapProvider(
 
   private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
 
+  private  var timeSeriesFunction: Option[String] = None
+
   @throws[MalformedDataMapCommandException]
   @throws[IOException]
   override def initMeta(ctasSqlStatement: String): Unit = {
@@ -58,7 +60,12 @@ class MVDataMapProvider(
       throw new MalformedDataMapCommandException(
         "select statement is mandatory")
     }
-    MVHelper.createMVDataMap(sparkSession, dataMapSchema, ctasSqlStatement, true)
+    MVHelper.createMVDataMap(sparkSession,
+      dataMapSchema,
+      ctasSqlStatement,
+      true,
+      timeSeriesFunction,
+      mainTable)
     try {
       DataMapStoreManager.getInstance.registerDataMapCatalog(this, dataMapSchema)
       if (dataMapSchema.isLazy) {
@@ -116,7 +123,7 @@ class MVDataMapProvider(
           case s: SubqueryAlias => s.child
           case other => other
         }
-      val updatedQuery = new CarbonSpark2SqlParser().addPreAggFunction(ctasQuery)
+      var updatedQuery = new CarbonSpark2SqlParser().addPreAggFunction(ctasQuery)
       val queryPlan = SparkSQLUtil.execute(
         sparkSession.sql(updatedQuery).queryExecution.analyzed,
         sparkSession).drop("preAgg")
@@ -207,4 +214,8 @@ class MVDataMapProvider(
   }
 
   override def supportRebuild(): Boolean = true
+
+  def setTimeSeriesFunction(timeSeriesFunction: Option[String]): Unit = {
+    this.timeSeriesFunction = timeSeriesFunction
+  }
 }

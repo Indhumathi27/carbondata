@@ -451,7 +451,7 @@ object PreAggregateUtil {
       thriftTableInfo
     } catch {
       case e: Exception =>
-        LOGGER.error("Pre Aggregate Parent table update failed reverting changes", e)
+        LOGGER.error("Datamap Parent table update failed reverting changes", e)
         throw e
     } finally {
       // release lock after command execution completion
@@ -705,6 +705,11 @@ object PreAggregateUtil {
           groupingExpressions += a.getParentColumnTableRelations.get(0).getColumnName
           aggregateColumns += a.getParentColumnTableRelations.get(0).getColumnName
         }
+    }
+    if (aggregateColumns.isEmpty || groupingExpressions.isEmpty) {
+      throw new MalformedCarbonCommandException(
+        "Aggregate EXpressions/Grouping expressions is empty to create timeseries datamap. Use" +
+        " MV datamap instead")
     }
     s"select ${
       aggregateColumns.mkString(",")

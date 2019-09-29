@@ -1090,7 +1090,7 @@ public class CarbonTable implements Serializable, Writable {
 
   public boolean isChildDataMap() {
     return null != tableInfo.getParentRelationIdentifiers() && !tableInfo
-        .getParentRelationIdentifiers().isEmpty();
+        .getParentRelationIdentifiers().isEmpty() && !isChildTable();
   }
 
   public boolean isChildTable() {
