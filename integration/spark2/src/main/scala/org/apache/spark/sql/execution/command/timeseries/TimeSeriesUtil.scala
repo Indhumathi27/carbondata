@@ -21,8 +21,9 @@ import scala.collection.mutable
 import org.apache.spark.sql.execution.command.{DataMapField, Field}
 
 import org.apache.carbondata.common.exceptions.sql.{MalformedCarbonCommandException, MalformedDataMapCommandException}
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.metadata.datatype.DataTypes
-import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider.TIMESERIES
+import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider._
 import org.apache.carbondata.core.metadata.schema.datamap.Granularity
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.preagg.TimeSeriesUDF
@@ -47,12 +48,41 @@ object TimeSeriesUtil {
     val eventTime = dmproperties.get(TIMESERIES_EVENTTIME)
     if (!eventTime.isDefined) {
       throw new MalformedCarbonCommandException("event_time not defined in time series")
+    } else if (eventTime.get.contains(",")) {
+      throw new MalformedCarbonCommandException(
+        "Provided event_time is Invalid. Only one column name has to be provided with event_time")
     } else {
       val carbonColumn = parentTable.getColumnByName(parentTable.getTableName, eventTime.get.trim)
       if (carbonColumn.getDataType != DataTypes.TIMESTAMP) {
         throw new MalformedCarbonCommandException(
           "Timeseries event time is only supported on Timestamp " +
           "column")
+      }
+    }
+  }
+
+  /**
+   * Below method will be used to validate whether column mentioned in time series
+   * is timestamp/date column or not
+   *
+   * @param dmproperties data map properties
+   * @param parentTable  parent table
+   * @return whether time stamp column
+   */
+  def validateTimeSeriesDataTyeForEventTime(dmproperties: Map[String, String],
+      parentTable: CarbonTable) {
+    val eventTime = dmproperties.get(TIMESERIES_EVENTTIME)
+    if (!eventTime.isDefined) {
+      throw new MalformedCarbonCommandException("event_time not defined in time series")
+    } else if (eventTime.get.contains(",")) {
+      throw new MalformedCarbonCommandException(
+        "Provided event_time is Invalid. Only one column name has to be provided with event_time")
+    } else {
+      val carbonColumn = parentTable.getColumnByName(parentTable.getTableName, eventTime.get.trim)
+      if (!(carbonColumn.getDataType == DataTypes.TIMESTAMP ||
+            carbonColumn.getDataType == DataTypes.DATE)) {
+        throw new MalformedCarbonCommandException(
+          "Timeseries event time is only supported on Timestamp & Date column")
       }
     }
   }
@@ -82,10 +112,12 @@ object TimeSeriesUtil {
     }
 
     // 2. check whether timeseries and granularity match
-    if (isFound && !dmClassName.equalsIgnoreCase(TIMESERIES.toString)) {
+    if (isFound && !(dmClassName.equalsIgnoreCase(TIMESERIES.toString) ||
+                     dmClassName.equalsIgnoreCase(MV_TIMESERIES.toString))) {
       throw new MalformedDataMapCommandException(
         s"${TIMESERIES.toString} keyword missing")
-    } else if (!isFound && dmClassName.equalsIgnoreCase(TIMESERIES.toString)) {
+    } else if (!isFound && (dmClassName.equalsIgnoreCase(TIMESERIES.toString) ||
+                            dmClassName.equalsIgnoreCase(MV_TIMESERIES.toString))) {
       throw new MalformedDataMapCommandException(
         s"${TIMESERIES.toString} should define time granularity")
     } else if (isFound) {
@@ -119,6 +151,22 @@ object TimeSeriesUtil {
 
     throw new MalformedDataMapCommandException(
       s"Granularity only support $defaultValue")
+  }
+
+  def validateTimeSeriesGranularityForDate(
+      dmProperties: java.util.Map[String, String]): Unit = {
+    val defaultValue = "1"
+    for (granularity <- Granularity.values()) {
+      if (dmProperties.containsKey(granularity.getName) &&
+          dmProperties.get(granularity.getName).trim.equalsIgnoreCase(defaultValue)) {
+        if (!(granularity.getName.equalsIgnoreCase(Granularity.DAY.getName) ||
+              granularity.getName.equalsIgnoreCase(Granularity.MONTH.getName) ||
+              granularity.getName.equalsIgnoreCase(Granularity.YEAR.getName))) {
+          throw new MalformedCarbonCommandException(
+            "For Event_time Date type column, Granularity should be DAY,MONTH or YEAR")
+        }
+      }
+    }
   }
 
   /**

@@ -69,7 +69,13 @@ case class CarbonDataMapShowCommand(tableIdentifier: Option[TableIdentifier])
         setAuditTable(carbonTable)
         Checker.validateTableExists(table.database, table.table, sparkSession)
         if (carbonTable.hasDataMapSchema) {
-          dataMapSchemaList.addAll(carbonTable.getTableInfo.getDataMapSchemaList)
+          val dataMapSchemas = carbonTable
+            .getTableInfo
+            .getDataMapSchemaList
+            .asScala
+            .filter(_.getRelationIdentifier == null)
+            .asJava
+          dataMapSchemaList.addAll(dataMapSchemas)
         }
         val indexSchemas = DataMapStoreManager.getInstance().getDataMapSchemasOfTable(carbonTable)
         if (!indexSchemas.isEmpty) {

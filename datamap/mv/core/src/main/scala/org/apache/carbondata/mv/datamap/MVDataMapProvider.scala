@@ -24,6 +24,7 @@ import org.apache.spark.sql.{CarbonSession, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
 import org.apache.spark.sql.execution.command.management.CarbonLoadDataCommand
+import org.apache.spark.sql.execution.command.preaaggregate.PreAggregateUtil
 import org.apache.spark.sql.execution.command.table.CarbonDropTableCommand
 import org.apache.spark.sql.execution.datasources.FindDataSourceTable
 import org.apache.spark.sql.parser.CarbonSpark2SqlParser
@@ -37,6 +38,7 @@ import org.apache.carbondata.core.datamap.{DataMapCatalog, DataMapProvider, Data
 import org.apache.carbondata.core.datamap.dev.{DataMap, DataMapFactory}
 import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.indexstore.Blocklet
+import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider._
 import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema}
 import org.apache.carbondata.mv.rewrite.{SummaryDataset, SummaryDatasetCatalog}
 import org.apache.carbondata.processing.util.CarbonLoaderUtil
@@ -51,6 +53,8 @@ class MVDataMapProvider(
 
   private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
 
+  private  var timeSeriesFunction: Option[String] = None
+
   @throws[MalformedDataMapCommandException]
   @throws[IOException]
   override def initMeta(ctasSqlStatement: String): Unit = {
@@ -58,7 +62,12 @@ class MVDataMapProvider(
       throw new MalformedDataMapCommandException(
         "select statement is mandatory")
     }
-    MVHelper.createMVDataMap(sparkSession, dataMapSchema, ctasSqlStatement, true)
+    MVHelper.createMVDataMap(sparkSession,
+      dataMapSchema,
+      ctasSqlStatement,
+      true,
+      timeSeriesFunction,
+      mainTable)
     try {
       DataMapStoreManager.getInstance.registerDataMapCatalog(this, dataMapSchema)
       if (dataMapSchema.isLazy) {
@@ -116,7 +125,26 @@ class MVDataMapProvider(
           case s: SubqueryAlias => s.child
           case other => other
         }
-      val updatedQuery = new CarbonSpark2SqlParser().addPreAggFunction(ctasQuery)
+      var updatedQuery = new CarbonSpark2SqlParser().addPreAggFunction(ctasQuery)
+      if (dataMapSchema.getProviderName
+        .equalsIgnoreCase(MV_TIMESERIES.getShortName)) {
+        val childSchema = dataMapTable.getTableInfo.getFactTable.buildChildSchema(
+          dataMapSchema.getDataMapName,
+          dataMapSchema.getProviderName,
+          dataMapTable.getDatabaseName,
+          ctasQuery,
+          "")
+        // mv_timeseries datamap can have only single parent table
+        val parentTable = MVHelper.getTables(sparkSession
+          .sql(updatedQuery)
+          .queryExecution
+          .analyzed).asJava.get(0)
+        val timeSeriesQuery = PreAggregateUtil.createTimeSeriesSelectQueryFromMain(
+          childSchema.getChildSchema,
+          parentTable.identifier.table,
+          parentTable.identifier.database.get)
+        updatedQuery = new CarbonSpark2SqlParser().addPreAggFunction(timeSeriesQuery)
+      }
       val queryPlan = SparkSQLUtil.execute(
         sparkSession.sql(updatedQuery).queryExecution.analyzed,
         sparkSession).drop("preAgg")
@@ -207,4 +235,8 @@ class MVDataMapProvider(
   }
 
   override def supportRebuild(): Boolean = true
+
+  def setTimeSeriesFunction(timeSeriesFunction: Option[String]): Unit = {
+    this.timeSeriesFunction = timeSeriesFunction
+  }
 }
