@@ -29,6 +29,7 @@ import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.DataMapStoreManager
 import org.apache.carbondata.core.datastore.compression.CompressorFactory
 import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider.MV
+import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider.MV_TIMESERIES
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 
 /**
@@ -199,7 +200,8 @@ object DataMapUtil {
     val dataMapSchemaList = DataMapStoreManager.getInstance.
       getDataMapSchemasOfTable(carbonTable).asScala
     dataMapSchemaList.foreach { dataMapSchema =>
-      if (dataMapSchema.getProviderName.equalsIgnoreCase(MV.toString)) {
+      if (dataMapSchema.getProviderName.equalsIgnoreCase(MV.toString) ||
+          dataMapSchema.getProviderName.equalsIgnoreCase(MV_TIMESERIES.toString)) {
         return true
       }
     }
