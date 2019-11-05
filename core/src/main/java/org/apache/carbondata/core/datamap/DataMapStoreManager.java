@@ -284,7 +284,7 @@ public final class DataMapStoreManager {
    * @param dataMapProvider
    */
   private void initializeDataMapCatalogs(DataMapProvider dataMapProvider) throws IOException {
-    if (dataMapCatalogs == null) {
+    if (dataMapCatalogs == null || dataMapCatalogs.isEmpty()) {
       dataMapCatalogs = new ConcurrentHashMap<>();
       List<DataMapSchema> dataMapSchemas = getAllDataMapSchemas();
       for (DataMapSchema schema : dataMapSchemas) {

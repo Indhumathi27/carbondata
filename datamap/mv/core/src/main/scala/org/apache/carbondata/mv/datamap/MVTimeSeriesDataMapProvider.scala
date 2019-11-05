@@ -22,23 +22,12 @@ import java.util
 import scala.collection.JavaConverters._
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
-import org.apache.spark.sql.execution.command.management.CarbonLoadDataCommand
-import org.apache.spark.sql.execution.command.preaaggregate.PreAggregateUtil
 import org.apache.spark.sql.execution.command.timeseries.TimeSeriesUtil
-import org.apache.spark.sql.execution.datasources.FindDataSourceTable
-import org.apache.spark.sql.parser.CarbonSpark2SqlParser
-import org.apache.spark.sql.util.SparkSQLUtil
 
 import org.apache.carbondata.common.exceptions.sql.{MalformedCarbonCommandException,
   MalformedDataMapCommandException}
 import org.apache.carbondata.common.logging.LogServiceFactory
-import org.apache.carbondata.core.constants.CarbonCommonConstants
-import org.apache.carbondata.core.datamap.status.DataMapStatusManager
-import org.apache.carbondata.core.metadata.schema.datamap.DataMapClassProvider.MV_TIMESERIES
 import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema}
-import org.apache.carbondata.processing.util.CarbonLoaderUtil
 
 class MVTimeSeriesDataMapProvider(mainTable: CarbonTable,
     sparkSession: SparkSession,
