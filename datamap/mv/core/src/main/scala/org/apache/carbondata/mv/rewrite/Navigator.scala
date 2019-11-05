@@ -17,8 +17,14 @@
 
 package org.apache.carbondata.mv.rewrite
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap}
+import scala.collection.JavaConverters._
 
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeMap, AttributeReference, Expression, Literal, NamedExpression, ScalaUDF}
+import org.apache.spark.sql.execution.command.timeseries.TimeSeriesFunction
+import org.apache.spark.sql.types.{DataType, DataTypes}
+import org.apache.spark.unsafe.types.UTF8String
+
+import org.apache.carbondata.core.metadata.schema.datamap.Granularity
 import org.apache.carbondata.mv.datamap.MVUtil
 import org.apache.carbondata.mv.expressions.modular._
 import org.apache.carbondata.mv.plans.modular
@@ -66,11 +72,116 @@ private[mv] class Navigator(catalog: SummaryDatasetCatalog, session: MVSession) 
         }
     }
     if (rewrittenPlan.fastEquals(plan)) {
-      None
+      val timeSeriesUdf = rewrittenPlan match {
+        case s: Select =>
+          getTimeseriesUdf(s.outputList)
+        case g: GroupBy =>
+          getTimeseriesUdf(g.outputList)
+      }
+      if (null != timeSeriesUdf._2) {
+        // check for rollup and rewrite the plan
+        val datasets = catalog.lookupFeasibleSummaryDatasets(rewrittenPlan)
+        val rewrittenQuery: java.lang.String = rewrittenPlan.asCompactSQL
+        var queryGranularity: String = null
+        var udfName: String = null
+        datasets.foreach { dataset =>
+          //
+          val datamapPlan = session.sessionState.modularizer.modularize(
+            session.sessionState.optimizer.execute(dataset.plan)).next().harmonized
+          val datamapQuery = datamapPlan match {
+            case s: Select =>
+              getTimeseriesUdf(s.outputList)
+            case g: GroupBy =>
+              getTimeseriesUdf(g.outputList)
+          }
+          if (Granularity.valueOf(timeSeriesUdf._2.toUpperCase).ordinal() <=
+            Granularity.valueOf(datamapQuery._2.toUpperCase).ordinal()) {
+            udfName = datamapQuery._1
+            if (rewrittenQuery.replace(timeSeriesUdf._1, datamapQuery._1)
+              .equalsIgnoreCase(datamapPlan.asCompactSQL)) {
+              if (queryGranularity == null) {
+                queryGranularity = datamapQuery._2
+              } else if (Granularity.valueOf(queryGranularity.toUpperCase()).ordinal() >=
+                         Granularity.valueOf(datamapQuery._2.toUpperCase).ordinal()) {
+                queryGranularity = datamapQuery._2
+              }
+            }
+          }
+        }
+        if(null != queryGranularity) {
+          val newPlan = plan.transformDown {
+            case p => p.transformAllExpressions {
+              case tudf: ScalaUDF =>
+                if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
+                  var children: Seq[Expression] = Seq.empty
+                  tudf.collect {
+                    case attr: AttributeReference =>
+                      children = children :+ attr
+                      attr
+                  }
+                  children = children :+
+                             new Literal(UTF8String.fromString(queryGranularity.toLowerCase),
+                               DataTypes.StringType)
+                  ScalaUDF(tudf.function,
+                    tudf.dataType,
+                    children,
+                    tudf.inputTypes,
+                    tudf.udfName,
+                    tudf.nullable,
+                    tudf.deterministic)
+                } else {
+                  tudf
+                }
+              case a@Alias(tudf: ScalaUDF, _) =>
+                if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
+                  var children: Seq[Expression] = Seq.empty
+                  tudf.collect {
+                    case attr: AttributeReference =>
+                      children = children :+ attr
+                      attr
+                  }
+                  children = children :+
+                             new Literal(UTF8String.fromString(queryGranularity.toLowerCase),
+                               DataTypes.StringType)
+                  Alias(ScalaUDF(tudf.function,
+                    tudf.dataType,
+                    children,
+                    tudf.inputTypes,
+                    tudf.udfName,
+                    tudf.nullable,
+                    tudf.deterministic), udfName)(a.exprId,
+                    a.qualifier).asInstanceOf[NamedExpression]
+                } else {
+                  a
+                }
+            }
+          }
+          val modifiedPlan = rewriteWithSummaryDatasetsCore(newPlan, rewrite)
+          modifiedPlan.get.map(_.setRolledUp())
+          modifiedPlan
+        } else {
+          None
+        }
+      } else {
+        None
+      }
     } else {
       Some(rewrittenPlan)
     }
   }
+
+    def getTimeseriesUdf(outputList: scala.Seq[NamedExpression]): (String, String) = {
+      outputList.collect {
+        case Alias(udf: ScalaUDF, name) =>
+          if (udf.function.isInstanceOf[TimeSeriesFunction]) {
+            udf.children.collect {
+              case l: Literal =>
+                return (name, l.value.toString)
+            }
+          }
+      }
+      (null, null)
+    }
 
   def subsume(
       subsumer: ModularPlan,

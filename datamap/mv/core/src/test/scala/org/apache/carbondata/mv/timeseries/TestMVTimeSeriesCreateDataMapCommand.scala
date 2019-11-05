@@ -134,16 +134,16 @@ class TestMVTimeSeriesCreateDataMapCommand extends QueryTest with BeforeAndAfter
     sql(
       "create datamap datamap2 on table maintable using 'mv' as " +
       "select timeseries(projectjoindate,'hour'), sum(projectcode) from maintable group by timeseries(projectjoindate,'hour')")
-    sql(
-      "create datamap datamap3 on table maintable using 'mv' as " +
-      "select timeseries(projectjoindate,'minute'), sum(projectcode) from maintable group by timeseries(projectjoindate,'minute')")
-    sql(
-      "create datamap datamap4 on table maintable using 'mv' as " +
-      "select timeseries(projectjoindate,'day'), sum(projectcode) from maintable group by timeseries(projectjoindate,'day')")
-    sql(
-      "create datamap datamap5 on table maintable using 'mv' as " +
-      "select timeseries(projectjoindate,'year'), sum(projectcode) from maintable group by timeseries(projectjoindate,'year')")
-    dropDataMaps
+//    sql(
+//      "create datamap datamap3 on table maintable using 'mv' as " +
+//      "select timeseries(projectjoindate,'minute'), sum(projectcode) from maintable group by timeseries(projectjoindate,'minute')")
+//    sql(
+//      "create datamap datamap4 on table maintable using 'mv' as " +
+//      "select timeseries(projectjoindate,'day'), sum(projectcode) from maintable group by timeseries(projectjoindate,'day')")
+//    sql(
+//      "create datamap datamap5 on table maintable using 'mv' as " +
+//      "select timeseries(projectjoindate,'year'), sum(projectcode) from maintable group by timeseries(projectjoindate,'year')")
+//    dropDataMaps
   }
 
   test("test mv_timeseries create datamap with more event_columns") {
@@ -215,7 +215,7 @@ class TestMVTimeSeriesCreateDataMapCommand extends QueryTest with BeforeAndAfter
   }
 
   override def afterAll(): Unit = {
-    drop()
+//    drop()
     if (null != timestampFormat) {
       CarbonProperties.getInstance()
         .addProperty(CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT, timestampFormat)
