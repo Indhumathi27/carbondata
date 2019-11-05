@@ -25,10 +25,10 @@ import org.apache.carbondata.mv.rewrite.TestUtil
 
 class TestMVTimeSeriesLoadAndQuery extends QueryTest with BeforeAndAfterAll {
 
-  override def beforeAll(): Unit = {
-    drop()
-    createTable()
-  }
+//  override def beforeAll(): Unit = {
+//    drop()
+//    createTable()
+//  }
 
   test("create MV timeseries datamap with simple projection and aggregation and filter") {
     sql("drop datamap if exists datamap1")
@@ -329,9 +329,38 @@ class TestMVTimeSeriesLoadAndQuery extends QueryTest with BeforeAndAfterAll {
     checkPlan("datamap1", df)
   }
 
+  test("test mv_timeseries for same event_column with different granularities") {
+//    createTable()
+//    loadData("maintable")
+    sql("drop datamap if exists datamap1")
+    sql("drop datamap if exists datamap2")
+    sql(
+      "create datamap datamap1 on table maintable using 'mv' as " +
+      "select timeseries(projectjoindate,'second'),projectcode from maintable")
+    sql(
+      "create datamap datamap2 on table maintable using 'mv' as " +
+      "select timeseries(projectjoindate,'hour'),projectcode from maintable")
+//    sql("select timeseries(projectjoindate,'Hour'),projectcode from maintable").show(false)
+//    sql("explain select timeseries(projectjoindate,'Hour'),projectcode from maintable").show(false)
+
+
+        sql("select timeseries(projectjoindate,'day'),projectcode from maintable").show(false)
+    sql("explain select timeseries(projectjoindate,'day'),projectcode from maintable").show(false)
+
+    //    sql("explain select timeseries(projectjoindate,'day'), sum(projectcode) from maintable group by timeseries(projectjoindate,'day')").show(false)
+
+  }
+
+
+
+  test("test") {
+    createTable()
+    loadData("maintable")
+  }
+
 
   override def afterAll(): Unit = {
-    drop()
+//    drop()
   }
 
   def drop(): Unit = {

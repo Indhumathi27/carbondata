@@ -34,6 +34,7 @@ import org.apache.spark.sql.execution.command.timeseries.{TimeSeriesFunction, Ti
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.parser.CarbonSpark2SqlParser
 import org.apache.spark.sql.types.{ArrayType, DateType, MapType, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.util.{DataMapUtil, PartitionUtils}
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
@@ -656,7 +657,11 @@ object MVHelper {
         val oList = for ((o1, o2) <- mappings) yield {
           if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
         }
-        relation.copy(outputList = oList).setRewritten()
+        if(s.rolledUp) {
+          relation.copy(outputList = oList).setRewritten().setRolledUp()
+        } else {
+          relation.copy(outputList = oList).setRewritten()
+        }
       case g: GroupBy if g.dataMapTableRelation.isDefined =>
         val relation =
           g.dataMapTableRelation.get.asInstanceOf[MVPlanWrapper].plan.asInstanceOf[Select]
@@ -784,11 +789,19 @@ object MVHelper {
               // TODO Remove the unnecessary columns from selection.
               // Only keep columns which are required by parent.
               val inputSel = child.outputList
-              select.copy(
-                outputList = outputSel,
-                inputList = inputSel,
-                flagSpec = updatedFlagSpec,
-                children = Seq(child)).setRewritten()
+              if(select.rolledUp) {
+                select.copy(
+                  outputList = outputSel,
+                  inputList = inputSel,
+                  flagSpec = updatedFlagSpec,
+                  children = Seq(child)).setRewritten().setRolledUp()
+              } else {
+                select.copy(
+                  outputList = outputSel,
+                  inputList = inputSel,
+                  flagSpec = updatedFlagSpec,
+                  children = Seq(child)).setRewritten()
+              }
             }
 
           case _ => select
@@ -853,16 +866,95 @@ object MVHelper {
     }
   }
 
-  /**
+  /*
    * Rewrite the updated mv query with corresponding MV table.
    */
   def rewriteWithMVTable(rewrittenPlan: ModularPlan, rewrite: QueryRewrite): ModularPlan = {
     if (rewrittenPlan.find(_.rewritten).isDefined) {
-      val updatedDataMapTablePlan = rewrittenPlan transform {
+      var updatedDataMapTablePlan = rewrittenPlan transform {
         case s: Select =>
           MVHelper.updateDataMap(s, rewrite)
         case g: GroupBy =>
           MVHelper.updateDataMap(g, rewrite)
+      }
+      if(true) {
+        rewrite.modularPlan match {
+          case select: Select =>
+            val sel = select.outputList
+            val upolist = updatedDataMapTablePlan.asInstanceOf[Select].outputList
+            var finallist: Seq[NamedExpression] = Seq.empty
+            val mapping = sel zip upolist
+            var attrRef1: AttributeReference = null
+            val subsme = rewrite.newSubsumerName()
+
+            for ((s, d) <- mapping) {
+              var attrRef: AttributeReference = null
+              d match {
+                case a@Alias(child: AttributeReference, name) =>
+                  attrRef = child
+                  a
+                case _ =>
+              }
+              s match {
+                case a@Alias(tudf: ScalaUDF, aliasname) =>
+                  if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
+                    val name1 = subsme + ".`" + attrRef.name + "`"
+                    val literal = tudf.children.last.asInstanceOf[Literal].value.toString
+                    val newName = tudf.udfName.getOrElse("timeseries") + "(" + name1 + ",'" +
+                                  literal + "')"
+                    var children: Seq[Expression] = {
+                      (AttributeReference(name1, attrRef
+                        .dataType)(
+                        exprId = tudf.children.head.asInstanceOf[AttributeReference].exprId,
+                        qualifier = None)) ::
+                      (new Literal(UTF8String.fromString("'" + literal + "'"),
+                        org.apache.spark.sql.types.DataTypes.StringType)) ::
+                      Nil
+                    }
+                    finallist = finallist.:+(Alias(ScalaUDF(tudf.function,
+                      tudf.dataType,
+                      children,
+                      tudf.inputTypes,
+                      tudf.udfName,
+                      tudf.nullable,
+                      tudf.deterministic), aliasname)(a.exprId,
+                      a.qualifier).asInstanceOf[NamedExpression])
+                  }
+                  a
+                case attr: AttributeReference =>
+                  finallist = finallist.:+(AttributeReference(attr.name, attr
+                    .dataType)(
+                    exprId = attr.exprId,
+                    qualifier = Some(subsme)))
+                  attr
+                case other => other
+              }
+            }
+            val tChildren = new collection.mutable.ArrayBuffer[ModularPlan]()
+            val tAliasMap = new collection.mutable.HashMap[Int, String]()
+
+            val usel_1a = select.copy(outputList = finallist, inputList = finallist)
+            tChildren += usel_1a
+            tAliasMap += (tChildren.indexOf(usel_1a) -> subsme)
+            updatedDataMapTablePlan = select.copy(outputList = finallist,
+              inputList = finallist,
+              aliasMap = tAliasMap.toMap,
+              children = Seq(updatedDataMapTablePlan)).setRewritten()
+
+          case groupby: GroupBy =>
+            val olist = groupby.outputList
+            val output = updatedDataMapTablePlan.output.asInstanceOf[Seq[NamedExpression]]
+            val mappings = olist zip output
+            val ooList = for ((o1, o2) <- mappings) yield {
+              if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
+            }
+            val mappings1 = output zip olist
+            val ooList1 = for ((o1, o2) <- mappings) yield {
+              if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
+            }
+            ooList
+        }
+        rewrite.modularPlan
       }
       updatedDataMapTablePlan
     } else {

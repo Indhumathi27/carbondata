@@ -87,6 +87,21 @@ abstract class ModularPlan
     this
   }
 
+  private var _rolledup: Boolean = false
+
+  /**
+   * Marks this plan as already rewritten.
+   */
+  private[mv] def setRolledUp(): ModularPlan = {
+    _rolledup = true
+    children.foreach(_.setRolledUp())
+    this
+  }
+
+  def rolledUp: Boolean = {
+    _rolledup
+  }
+
   /**
    * Returns true if this node and its children have already been gone through query rewrite.
    * Note this this is only an optimization used to avoid rewriting trees that have already

@@ -90,6 +90,9 @@ class MVAnalyzerRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
       if (modularPlan.find(_.rewritten).isDefined) {
         var compactSQL = modularPlan.asCompactSQL
         compactSQL = reWriteTheUDFInSQLWithQualifierName(modularPlan, compactSQL)
+        var temp = compactSQL.split("\n")
+        temp(0) = temp(0).replace(" UDF:", " ")
+        compactSQL = temp.mkString("\n")
         val analyzed = sparkSession.sql(compactSQL).queryExecution.analyzed
         analyzed
       } else {
