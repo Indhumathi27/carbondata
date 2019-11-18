@@ -17,7 +17,7 @@
 
 package org.apache.carbondata.mv.rewrite
 
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeMap, Cast, Divide, Expression, Multiply, PredicateHelper, ScalaUDF}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeMap, Cast, Divide, Expression, Multiply, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 
 import org.apache.carbondata.mv.plans.modular
@@ -374,18 +374,36 @@ object Utils extends PredicateHelper {
         else if (sel_3q.outputList.contains(exprE)) {
           exprE match {
             case attr: Attribute => // this subexpression must in subsumee select output list
-              gb_2c.outputList.lift(
+              var exp = gb_2c.outputList.lift(
                 gb_2q.outputList.indexWhere {
                   case a if a.toAttribute.semanticEquals(attr) => true;
                   case other => false
-                  })
+                })
+              if (exp.isEmpty && gb_2c.outputList.size < gb_2q.outputList.size) {
+                if (gb_2c.outputList.exists(e => e.semanticEquals(exprE)) &&
+                    gb_2q.outputList.exists(e => e.semanticEquals(exprE))) {
+                  exp = Some(exprE.asInstanceOf[NamedExpression])
+                }
+              }
+              exp
 
             case alias: Alias =>
-              gb_2c.outputList.lift(
+              var exp = gb_2c.outputList.lift(
                 gb_2q.outputList.indexWhere {
-                  case a if a.toAttribute.semanticEquals(alias.toAttribute) => true;
+                  case a
+                    if a.toAttribute.semanticEquals(alias.toAttribute) &&
+                            a.toAttribute.semanticEquals(exprE.asInstanceOf[Alias].toAttribute) => true;
                   case other => false
                   })
+              if (exp.isEmpty && gb_2c.outputList.size < gb_2q.outputList.size) {
+                if (
+                  (gb_2c.outputList.exists(e => e.semanticEquals(exprE.asInstanceOf[Alias].child)) &&
+                  gb_2q.outputList.exists(e => e.semanticEquals(exprE.asInstanceOf[Alias].child))) ||
+                  gb_2q.outputList.exists(e => e.toAttribute.semanticEquals(alias.toAttribute))) {
+                  exp = Some(exprE.asInstanceOf[NamedExpression])
+                }
+              }
+              exp
 
             case _ => None
           }

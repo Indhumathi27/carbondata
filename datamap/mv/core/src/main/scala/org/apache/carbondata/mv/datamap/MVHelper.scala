@@ -90,33 +90,45 @@ object MVHelper {
     var counter = 0
     // the ctas query can have duplicate columns, so we should take distinct and create fields,
     // so that it won't fail during create mv table
-    val fields = logicalPlan.output.map { attr =>
+    var count = 0;
+    val fields: java.util.List[Field] = new util.ArrayList[Field]()
+      logicalPlan.output.map { attr =>
       if (attr.dataType.isInstanceOf[ArrayType] || attr.dataType.isInstanceOf[StructType] ||
           attr.dataType.isInstanceOf[MapType]) {
         throw new UnsupportedOperationException(
           s"MV datamap is not supported for complex datatype columns and complex datatype return " +
           s"types of function :" + attr.name)
       }
-      val name = updateColumnName(attr, counter)
-      counter += 1
-      val rawSchema = '`' + name + '`' + ' ' + attr.dataType.typeName
+        var name = updateColumnName(attr, counter)
+        var columnComment: String = ""
+        if (fields.asScala.exists(field => field.name.get.equalsIgnoreCase(name))) {
+          name = name + CarbonCommonConstants.UNDERSCORE + count
+          columnComment = "duplicateColumn"
+          count = count + 1
+        }
+        counter += 1
+        val rawSchema = '`' + name + '`' + ' ' + attr.dataType.typeName
       if (attr.dataType.typeName.startsWith("decimal")) {
         val (precision, scale) = CommonUtil.getScaleAndPrecision(attr.dataType.catalogString)
-        Field(column = name,
+        val field = Field(column = name,
           dataType = Some(attr.dataType.typeName),
           name = Some(name),
           children = None,
           precision = precision,
           scale = scale,
-          rawSchema = rawSchema)
+          rawSchema = rawSchema,
+          columnComment = columnComment)
+        fields.add(field)
       } else {
-        Field(column = name,
+        val field = Field(column = name,
           dataType = Some(attr.dataType.typeName),
           name = Some(name),
           children = None,
-          rawSchema = rawSchema)
+          rawSchema = rawSchema,
+          columnComment = columnComment)
+        fields.add(field)
       }
-    }.distinct
+    }
 
     val tableProperties = mutable.Map[String, String]()
     val parentTables = new util.ArrayList[String]()
@@ -167,7 +179,7 @@ object MVHelper {
     if (parentTablesList.size() == 1) {
       DataMapUtil
         .inheritTablePropertiesFromMainTable(parentTablesList.get(0),
-          fields,
+          fields.asScala.filterNot(f => f.columnComment.equalsIgnoreCase("duplicateColumn")),
           fieldRelationMap,
           tableProperties)
       if (granularity != null) {
@@ -219,7 +231,7 @@ object MVHelper {
     var order = 0
     val columnOrderMap = new java.util.HashMap[Integer, String]()
     if (partitionerFields.nonEmpty) {
-      fields.foreach { field =>
+      fields.asScala.foreach { field =>
         columnOrderMap.put(order, field.column)
         order += 1
       }
@@ -234,7 +246,7 @@ object MVHelper {
       ifNotExistPresent = ifNotExistsSet,
       new CarbonSpark2SqlParser().convertDbNameToLowerCase(tableIdentifier.database),
       tableIdentifier.table.toLowerCase,
-      fields,
+      fields.asScala,
       partitionerFields,
       tableProperties,
       None,
@@ -480,9 +492,6 @@ object MVHelper {
 
   def getAttributeMap(subsumer: Seq[NamedExpression],
       subsume: Seq[NamedExpression]): Map[AttributeKey, NamedExpression] = {
-    // when datamap is created with duplicate columns like select sum(age),sum(age) from table,
-    // the subsumee will have duplicate, so handle that case here
-    if (subsumer.length == subsume.groupBy(_.name).size) {
       subsume.zip(subsumer).flatMap { case (left, right) =>
         var tuples = left collect {
           case attr: AttributeReference =>
@@ -495,9 +504,6 @@ object MVHelper {
         }
         Seq((AttributeKey(left), createAttrReference(right, left.name))) ++ tuples
       }.toMap
-    } else {
-      throw new UnsupportedOperationException("Cannot create mapping with unequal sizes")
-    }
   }
 
   def createAttrReference(ref: NamedExpression, name: String): Alias = {
@@ -652,9 +658,37 @@ object MVHelper {
         val outputList = getUpdatedOutputList(relation.outputList, s.dataMapTableRelation)
         // when the output list contains multiple projection of same column, but relation
         // contains distinct columns, mapping may go wrong with columns, so select distinct
-        val mappings = s.outputList.distinct zip outputList
-        val oList = for ((o1, o2) <- mappings) yield {
+        val mappings = s.outputList zip outputList
+        var oList = for ((o1, o2) <- mappings) yield {
           if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
+        }
+        if(rewrite.optimizedPlan.output.size > oList.size) {
+          val set = new util.HashSet[Attribute]()
+          val duplicateElements = new util.ArrayList[Attribute]()
+
+          for (element <- rewrite.optimizedPlan.output) {
+            if(element.isInstanceOf[AttributeReference]) {
+            if (!set.add(element)) duplicateElements.add(element)
+            } else if(element.isInstanceOf[Alias]){
+              if (!set.add(element.asInstanceOf[Alias].child.asInstanceOf[Attribute])) duplicateElements.add(element)            }
+          }
+          var extraMappings: Seq[(NamedExpression, NamedExpression)] = Seq.empty
+          duplicateElements.asScala.foreach {
+            duplicateElement =>
+              outputList.foreach {
+                output =>
+                  if (output.name
+                    .substring(output.name.lastIndexOf(CarbonCommonConstants.UNDERSCORE) + 1,
+                      output.name.length)
+                    .equalsIgnoreCase(duplicateElement.name)) {
+                    extraMappings = extraMappings :+ ((duplicateElement, output))
+                  }
+              }
+          }
+          val extraOList =  for ((o1, o2) <- extraMappings) yield {
+            if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
+          }
+          oList = oList.++(extraOList)
         }
         relation.copy(outputList = oList).setRewritten()
       case g: GroupBy if g.dataMapTableRelation.isDefined =>

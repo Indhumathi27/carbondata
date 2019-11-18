@@ -741,10 +741,18 @@ object SelectSelectGroupbyChildDelta extends DefaultMatchPattern with PredicateH
               // Mappings of output of two plans by checking semantic equals.
               val mappings = sel_3q_exp.outputList.zipWithIndex.map { case(exp, index) =>
                 (exp, gb_2c.outputList.find {
-                  case a: Alias if exp.isInstanceOf[Alias] =>
+                  case a: Alias
+                    if exp.isInstanceOf[Alias] =>
                     a.child.semanticEquals(exp.children.head)
-                  case a: Alias => a.child.semanticEquals(exp)
-                  case other => other.semanticEquals(exp)
+                  case a: Alias =>
+                    a.child.semanticEquals(exp)
+                  case other =>
+                    exp match {
+                      case alias: Alias =>
+                        alias.child.semanticEquals(other)
+                      case _ =>
+                        other.semanticEquals(exp)
+                    }
                 }.getOrElse(gb_2c.outputList(index)))
               }
 

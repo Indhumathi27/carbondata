@@ -126,13 +126,13 @@ private[mv] class Navigator(catalog: SummaryDatasetCatalog, session: MVSession) 
       // In case of order by it adds extra select but that can be ignored while doing selection.
       case s@Select(_, _, _, _, _, Seq(g: GroupBy), _, _, _, _) =>
         s.copy(children = Seq(g.copy(dataMapTableRelation = Some(dataMapRelation))),
-          outputList = mVUtil.updateDuplicateColumns(s.outputList))
+          outputList = mVUtil.updateDuplicateColumns(s.outputList, dataMapRelation))
       case s: Select => s
         .copy(dataMapTableRelation = Some(dataMapRelation),
-          outputList = mVUtil.updateDuplicateColumns(s.outputList))
+          outputList = mVUtil.updateDuplicateColumns(s.outputList, dataMapRelation))
       case g: GroupBy => g
         .copy(dataMapTableRelation = Some(dataMapRelation),
-          outputList = mVUtil.updateDuplicateColumns(g.outputList))
+          outputList = mVUtil.updateDuplicateColumns(g.outputList, dataMapRelation))
       case other => other
     }
     (updatedSubsumer, subsumee) match {

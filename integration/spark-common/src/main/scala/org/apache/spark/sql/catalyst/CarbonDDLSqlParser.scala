@@ -750,7 +750,7 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
   protected def extractDimAndMsrFields(fields: Seq[Field],
       tableProperties: Map[String, String]):
   (Seq[Field], Seq[Field], Seq[String], Seq[String], Seq[String]) = {
-    var dimFields: LinkedHashSet[Field] = LinkedHashSet[Field]()
+    var dimFields: Seq[Field] = Seq[Field]()
     var msrFields: Seq[Field] = Seq[Field]()
     var dictExcludeCols: Array[String] = Array[String]()
     var noDictionaryDims: Seq[String] = Seq[String]()
@@ -883,15 +883,15 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
     fields.foreach { field =>
       if (dictExcludeCols.exists(x => x.equalsIgnoreCase(field.column))) {
         noDictionaryDims :+= field.column
-        dimFields += field
+        dimFields :+= field
       } else if (dictIncludeCols.exists(x => x.equalsIgnoreCase(field.column))) {
-        dimFields += field
+        dimFields :+= field
       } else if (field.dataType.get.toUpperCase.equals("TIMESTAMP") &&
                  !dictIncludeCols.exists(x => x.equalsIgnoreCase(field.column))) {
         noDictionaryDims :+= field.column
-        dimFields += field
+        dimFields :+= field
       } else if (isDetectAsDimensionDataType(field.dataType.get)) {
-        dimFields += field
+        dimFields :+= field
         // consider all String and binary cols as noDicitonaryDims by default
         if ((DataTypes.STRING.getName.equalsIgnoreCase(field.dataType.get)) ||
             (DataTypes.BINARY.getName.equalsIgnoreCase(field.dataType.get))) {
@@ -905,7 +905,7 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
                                                   field.column}}in sort_columns.")
       } else if (sortKeyDimsTmp.exists(x => x.equalsIgnoreCase(field.column))) {
         noDictionaryDims :+= field.column
-        dimFields += field
+        dimFields :+= field
       } else {
         msrFields :+= field
       }

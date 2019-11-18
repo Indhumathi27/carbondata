@@ -30,6 +30,8 @@ import org.apache.spark.sql.types.DataType
 
 import org.apache.carbondata.common.exceptions.sql.MalformedDataMapCommandException
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
+import org.apache.carbondata.mv.plans.modular.ModularPlan
+import org.apache.carbondata.mv.rewrite.MVPlanWrapper
 import org.apache.carbondata.spark.util.CommonUtil
 
 /**
@@ -332,14 +334,15 @@ class MVUtil {
     }
   }
 
-  def updateDuplicateColumns(outputList: Seq[NamedExpression]): Seq[NamedExpression] = {
+  def updateDuplicateColumns(outputList: Seq[NamedExpression], plan: ModularPlan): Seq[NamedExpression] = {
     val duplicateNameCols = outputList.groupBy(_.name).filter(_._2.length > 1).flatMap(_._2)
       .toList
     val updatedOutList = outputList.map { col =>
       val duplicateColumn = duplicateNameCols
         .find(a => a.semanticEquals(col))
       val qualifiedName = col.qualifier.getOrElse(s"${ col.exprId.id }") + "_" + col.name
-      if (duplicateColumn.isDefined) {
+      if (duplicateColumn.isDefined &&
+          plan.asInstanceOf[MVPlanWrapper].dataMapSchema.getParentTables.size() >= 2) {
         val attributesOfDuplicateCol = duplicateColumn.get.collect {
           case a: AttributeReference => a
         }
