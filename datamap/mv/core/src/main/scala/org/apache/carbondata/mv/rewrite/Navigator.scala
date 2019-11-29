@@ -17,14 +17,19 @@
 
 package org.apache.carbondata.mv.rewrite
 
+import java.util
+
 import scala.collection.JavaConverters._
+import scala.util.control.Breaks._
 
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeMap, AttributeReference, Expression, Literal, NamedExpression, ScalaUDF}
 import org.apache.spark.sql.execution.command.timeseries.TimeSeriesFunction
-import org.apache.spark.sql.types.{DataType, DataTypes}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.types.DataTypes
 import org.apache.spark.unsafe.types.UTF8String
 
 import org.apache.carbondata.core.metadata.schema.datamap.Granularity
+import org.apache.carbondata.core.preagg.TimeSeriesFunctionEnum
 import org.apache.carbondata.mv.datamap.MVUtil
 import org.apache.carbondata.mv.expressions.modular._
 import org.apache.carbondata.mv.plans.modular
@@ -80,85 +85,64 @@ private[mv] class Navigator(catalog: SummaryDatasetCatalog, session: MVSession) 
       }
       if (null != timeSeriesUdf._2) {
         // check for rollup and rewrite the plan
-        val datasets = catalog.lookupFeasibleSummaryDatasets(rewrittenPlan)
-        val rewrittenQuery: java.lang.String = rewrittenPlan.asCompactSQL
-        var queryGranularity: String = null
-        var udfName: String = null
-        datasets.foreach { dataset =>
-          //
-          val datamapPlan = session.sessionState.modularizer.modularize(
-            session.sessionState.optimizer.execute(dataset.plan)).next().harmonized
-          val datamapQuery = datamapPlan match {
-            case s: Select =>
-              getTimeseriesUdf(s.outputList)
-            case g: GroupBy =>
-              getTimeseriesUdf(g.outputList)
+        val dataSets = catalog.lookupFeasibleSummaryDatasets(rewrittenPlan)
+          .toList
+          .filter(p => p.dataMapSchema.isTimeSeries)
+        var granularity: java.util.List[TimeSeriesFunctionEnum] = new util
+        .ArrayList[TimeSeriesFunctionEnum]()
+        dataSets.foreach { dataset =>
+          dataset.plan.transformExpressions {
+            case a@Alias(udf: ScalaUDF, _) =>
+              if (udf.function.isInstanceOf[TimeSeriesFunction]) {
+                val gran = udf.children.last.asInstanceOf[Literal].toString().toUpperCase()
+                if (Granularity.valueOf(timeSeriesUdf._2.toUpperCase).ordinal() <=
+                    Granularity.valueOf(gran).ordinal()) {
+                  granularity.add(TimeSeriesFunctionEnum.valueOf(gran))
+                }
+              }
+              a
           }
-          if (Granularity.valueOf(timeSeriesUdf._2.toUpperCase).ordinal() <=
-            Granularity.valueOf(datamapQuery._2.toUpperCase).ordinal()) {
-            udfName = datamapQuery._1
-            if (rewrittenQuery.replace(timeSeriesUdf._1, datamapQuery._1)
-              .equalsIgnoreCase(datamapPlan.asCompactSQL)) {
-              if (queryGranularity == null) {
-                queryGranularity = datamapQuery._2
-              } else if (Granularity.valueOf(queryGranularity.toUpperCase()).ordinal() >=
-                         Granularity.valueOf(datamapQuery._2.toUpperCase).ordinal()) {
-                queryGranularity = datamapQuery._2
+        }
+        if (!granularity.isEmpty) {
+          granularity = granularity.asScala.sortBy(_.getOrdinal)(Ordering[Int].reverse).asJava
+          val rewrittenQuery: java.lang.String = rewrittenPlan.asCompactSQL
+          var orgTable: String = null
+          rewrittenPlan.collect {
+            case m: ModularRelation =>
+              orgTable = m.tableName
+          }
+          var queryGranularity: String = null
+          var newRewrittenPlan = rewrittenPlan
+          breakable {
+            granularity.asScala.foreach { func =>
+              newRewrittenPlan = rewriteGranularityInPlan(rewrittenPlan, func.getName)
+              val logicalPlan = session
+                .sparkSession
+                .sql(rewrittenQuery.replace(timeSeriesUdf._2, func.getName))
+                .queryExecution
+                .optimizedPlan
+              var rolledUptable: String = null
+              logicalPlan.collect {
+                case l: LogicalRelation =>
+                  rolledUptable = l.catalogTable.get.identifier.table
+              }
+              if (!rolledUptable.equalsIgnoreCase(orgTable)) {
+                queryGranularity = func.getName
+                break()
               }
             }
           }
-        }
-        if(null != queryGranularity) {
-          val newPlan = plan.transformDown {
-            case p => p.transformAllExpressions {
-              case tudf: ScalaUDF =>
-                if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
-                  var children: Seq[Expression] = Seq.empty
-                  tudf.collect {
-                    case attr: AttributeReference =>
-                      children = children :+ attr
-                      attr
-                  }
-                  children = children :+
-                             new Literal(UTF8String.fromString(queryGranularity.toLowerCase),
-                               DataTypes.StringType)
-                  ScalaUDF(tudf.function,
-                    tudf.dataType,
-                    children,
-                    tudf.inputTypes,
-                    tudf.udfName,
-                    tudf.nullable,
-                    tudf.deterministic)
-                } else {
-                  tudf
-                }
-              case a@Alias(tudf: ScalaUDF, _) =>
-                if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
-                  var children: Seq[Expression] = Seq.empty
-                  tudf.collect {
-                    case attr: AttributeReference =>
-                      children = children :+ attr
-                      attr
-                  }
-                  children = children :+
-                             new Literal(UTF8String.fromString(queryGranularity.toLowerCase),
-                               DataTypes.StringType)
-                  Alias(ScalaUDF(tudf.function,
-                    tudf.dataType,
-                    children,
-                    tudf.inputTypes,
-                    tudf.udfName,
-                    tudf.nullable,
-                    tudf.deterministic), udfName)(a.exprId,
-                    a.qualifier).asInstanceOf[NamedExpression]
-                } else {
-                  a
-                }
+          if (null != queryGranularity) {
+            val modifiedPlan = rewriteWithSummaryDatasetsCore(newRewrittenPlan, rewrite)
+            if(modifiedPlan.isDefined) {
+              modifiedPlan.get.map(_.setRolledUp())
+              modifiedPlan
+            } else {
+              None
             }
+          } else {
+            None
           }
-          val modifiedPlan = rewriteWithSummaryDatasetsCore(newPlan, rewrite)
-          modifiedPlan.get.map(_.setRolledUp())
-          modifiedPlan
         } else {
           None
         }
@@ -170,7 +154,61 @@ private[mv] class Navigator(catalog: SummaryDatasetCatalog, session: MVSession) 
     }
   }
 
-    def getTimeseriesUdf(outputList: scala.Seq[NamedExpression]): (String, String) = {
+  private def rewriteGranularityInPlan(plan: ModularPlan, queryGranularity: String) = {
+    val newPlan = plan.transformDown {
+      case p => p.transformAllExpressions {
+        case tudf: ScalaUDF =>
+          if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
+            var children: Seq[Expression] = Seq.empty
+            tudf.collect {
+              case attr: AttributeReference =>
+                children = children :+ attr
+                attr
+            }
+            children = children :+
+                       new Literal(UTF8String.fromString(queryGranularity.toLowerCase),
+                         DataTypes.StringType)
+            ScalaUDF(tudf.function,
+              tudf.dataType,
+              children,
+              tudf.inputTypes,
+              tudf.udfName,
+              tudf.nullable,
+              tudf.deterministic)
+          } else {
+            tudf
+          }
+        case a@Alias(tudf: ScalaUDF, name) =>
+          if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
+            var children: Seq[Expression] = Seq.empty
+            var literal: String = null
+            tudf.collect {
+              case attr: AttributeReference =>
+                children = children :+ attr
+                attr
+              case l: Literal =>
+                literal = l.value.toString
+            }
+            children = children :+
+                       new Literal(UTF8String.fromString(queryGranularity.toLowerCase),
+                         DataTypes.StringType)
+            Alias(ScalaUDF(tudf.function,
+              tudf.dataType,
+              children,
+              tudf.inputTypes,
+              tudf.udfName,
+              tudf.nullable,
+              tudf.deterministic), name.replace(", " + literal, ", " + queryGranularity))(a.exprId,
+              a.qualifier).asInstanceOf[NamedExpression]
+          } else {
+            a
+          }
+      }
+    }
+    newPlan
+  }
+
+  def getTimeseriesUdf(outputList: scala.Seq[NamedExpression]): (String, String) = {
       outputList.collect {
         case Alias(udf: ScalaUDF, name) =>
           if (udf.function.isInstanceOf[TimeSeriesFunction]) {

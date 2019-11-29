@@ -27,7 +27,7 @@ import org.apache.spark.sql.execution.command.cache._
 import org.apache.spark.sql.execution.command.indexserver.PrePrimingEventListener
 import org.apache.spark.sql.execution.command.mv._
 import org.apache.spark.sql.execution.command.preaaggregate._
-import org.apache.spark.sql.execution.command.timeseries.TimeSeriesFunction
+import org.apache.spark.sql.execution.command.timeseries.{TimeSeriesFunction, TimeSeriesFunctionNew}
 import org.apache.spark.sql.hive._
 import org.apache.spark.sql.profiler.Profiler
 
@@ -72,6 +72,7 @@ class CarbonEnv {
     LOGGER.info(s"Initializing CarbonEnv, store location: $storePath")
 
     sparkSession.udf.register("getTupleId", () => "")
+    sparkSession.udf.register("getTupleId", () => "")
     // added for handling preaggregate table creation. when user will fire create ddl for
     // create table we are adding a udf so no need to apply PreAggregate rules.
     sparkSession.udf.register("preAgg", () => "")
@@ -84,7 +85,7 @@ class CarbonEnv {
     // TODO: move it to proper place, it should be registered by datamap implementation
     sparkSession.udf.register("text_match", new TextMatchUDF)
     sparkSession.udf.register("text_match_with_limit", new TextMatchMaxDocUDF)
-
+    sparkSession.udf.register("mytestfun", new TimeSeriesFunctionNew)
     // added for handling timeseries function like hour, minute, day , month , year
     sparkSession.udf.register("timeseries", new TimeSeriesFunction)
     // acquiring global level lock so global configuration will be updated by only one thread

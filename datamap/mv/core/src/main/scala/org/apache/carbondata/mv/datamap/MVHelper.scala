@@ -22,6 +22,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
+import org.apache.calcite.schema.AggregateFunction
 import org.apache.spark.sql.{CarbonEnv, CarbonToSparkAdapter, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -877,20 +878,19 @@ object MVHelper {
         case g: GroupBy =>
           MVHelper.updateDataMap(g, rewrite)
       }
-      if(true) {
+      if(rewrittenPlan.rolledUp) {
         rewrite.modularPlan match {
           case select: Select =>
             val sel = select.outputList
             val upolist = updatedDataMapTablePlan.asInstanceOf[Select].outputList
             var finallist: Seq[NamedExpression] = Seq.empty
             val mapping = sel zip upolist
-            var attrRef1: AttributeReference = null
             val subsme = rewrite.newSubsumerName()
 
             for ((s, d) <- mapping) {
               var attrRef: AttributeReference = null
               d match {
-                case a@Alias(child: AttributeReference, name) =>
+                case a@Alias(child: AttributeReference, _) =>
                   attrRef = child
                   a
                 case _ =>
@@ -900,15 +900,13 @@ object MVHelper {
                   if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
                     val name1 = subsme + ".`" + attrRef.name + "`"
                     val literal = tudf.children.last.asInstanceOf[Literal].value.toString
-                    val newName = tudf.udfName.getOrElse("timeseries") + "(" + name1 + ",'" +
-                                  literal + "')"
-                    var children: Seq[Expression] = {
-                      (AttributeReference(name1, attrRef
+                    val children: Seq[Expression] = {
+                      AttributeReference(name1, attrRef
                         .dataType)(
                         exprId = tudf.children.head.asInstanceOf[AttributeReference].exprId,
-                        qualifier = None)) ::
-                      (new Literal(UTF8String.fromString("'" + literal + "'"),
-                        org.apache.spark.sql.types.DataTypes.StringType)) ::
+                        qualifier = None) ::
+                      new Literal(UTF8String.fromString("'" + literal + "'"),
+                        org.apache.spark.sql.types.DataTypes.StringType) ::
                       Nil
                     }
                     finallist = finallist.:+(Alias(ScalaUDF(tudf.function,
@@ -933,26 +931,105 @@ object MVHelper {
             val tChildren = new collection.mutable.ArrayBuffer[ModularPlan]()
             val tAliasMap = new collection.mutable.HashMap[Int, String]()
 
-            val usel_1a = select.copy(outputList = finallist, inputList = finallist)
+            val usel_1a = select.copy(outputList = finallist, inputList = finallist,predicateList = Seq.empty)
             tChildren += usel_1a
             tAliasMap += (tChildren.indexOf(usel_1a) -> subsme)
             updatedDataMapTablePlan = select.copy(outputList = finallist,
               inputList = finallist,
               aliasMap = tAliasMap.toMap,
+              predicateList = Seq.empty,
               children = Seq(updatedDataMapTablePlan)).setRewritten()
 
           case groupby: GroupBy =>
-            val olist = groupby.outputList
-            val output = updatedDataMapTablePlan.output.asInstanceOf[Seq[NamedExpression]]
-            val mappings = olist zip output
-            val ooList = for ((o1, o2) <- mappings) yield {
-              if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
+            updatedDataMapTablePlan match {
+              case select: Select =>
+                val sel = groupby.outputList
+                val upolist = updatedDataMapTablePlan.asInstanceOf[Select].outputList
+                var finallist: Seq[NamedExpression] = Seq.empty
+                var predicateList: Seq[Expression] = Seq.empty
+                val mapping = sel zip upolist
+                val subsme = rewrite.newSubsumerName()
+
+                for ((s, d) <- mapping) {
+                  var attrRef: AttributeReference = null
+                  var aliasname1: String = null
+                  d match {
+                    case a@Alias(child: AttributeReference, _) =>
+                      attrRef = child
+                      aliasname1 = a.name
+                    case Alias(agg: AggregateExpression, _) =>
+                      agg
+                  }
+                  s match {
+                    case a@Alias(tudf: ScalaUDF, aliasname) =>
+                      if (tudf.function.isInstanceOf[TimeSeriesFunction]) {
+                        val name1 = subsme + ".`" + aliasname1 + "`"
+                        val literal = tudf.children.last.asInstanceOf[Literal].value.toString
+                        val children: Seq[Expression] = {
+                          AttributeReference(name1, attrRef
+                            .dataType)(
+                            exprId = tudf.children.head.asInstanceOf[AttributeReference].exprId,
+                            qualifier = None) ::
+                          new Literal(UTF8String.fromString("'" + literal + "'"),
+                            org.apache.spark.sql.types.DataTypes.StringType) ::
+                          Nil
+                        }
+                        val scalaUDF = ScalaUDF(tudf.function,
+                          tudf.dataType,
+                          children,
+                          tudf.inputTypes,
+                          tudf.udfName,
+                          tudf.nullable,
+                          tudf.deterministic)
+                        groupby.predicateList.map {
+                          case ScalaUDF(function,dataType,children,inputTypes,udfName,nullable,udfDeterministic) =>
+                            predicateList = predicateList.:+(scalaUDF)
+                          case other =>
+                            predicateList = predicateList.:+(other)
+                        }
+                        finallist = finallist.:+(Alias(scalaUDF, aliasname)(a.exprId,
+                          a.qualifier).asInstanceOf[NamedExpression])
+                      }
+                      a
+                    case attr: AttributeReference =>
+                      finallist = finallist.:+(AttributeReference(attr.name, attr
+                        .dataType)(
+                        exprId = attr.exprId,
+                        qualifier = Some(subsme)))
+                      attr
+                    case a@Alias(agg: AggregateExpression , name) =>
+                      val newAgg = agg.transform {
+                        case attr: AttributeReference =>
+                          AttributeReference(name, attr
+                            .dataType)(
+                            exprId = attr.exprId,
+                            qualifier = Some(subsme))
+                      }
+
+                      finallist = finallist.:+(Alias(newAgg,name)(a.exprId,
+                        a.qualifier).asInstanceOf[NamedExpression])
+                    case other => other
+                  }
+                }
+                val tChildren = new collection.mutable.ArrayBuffer[ModularPlan]()
+                val tAliasMap = new collection.mutable.HashMap[Int, String]()
+
+                val usel_1a = select.copy(outputList = finallist, inputList = finallist, predicateList = Seq.empty)
+                tChildren += usel_1a
+                tAliasMap += (tChildren.indexOf(usel_1a) -> subsme)
+                updatedDataMapTablePlan = select.copy(outputList = finallist,
+                  inputList = finallist,
+                  aliasMap = tAliasMap.toMap,
+                  children = Seq(updatedDataMapTablePlan)).setRewritten()
+                  updatedDataMapTablePlan = groupby.copy(outputList = finallist,
+                    inputList = finallist,
+                    predicateList = predicateList,
+                    alias = Some(tAliasMap.mkString),
+                    child = updatedDataMapTablePlan).setRewritten()
+                updatedDataMapTablePlan = select.copy(outputList = finallist,
+                  inputList = finallist,
+                  children = Seq(updatedDataMapTablePlan)).setRewritten()
             }
-            val mappings1 = output zip olist
-            val ooList1 = for ((o1, o2) <- mappings) yield {
-              if (o1.name != o2.name) Alias(o2, o1.name)(exprId = o1.exprId) else o2
-            }
-            ooList
         }
         rewrite.modularPlan
       }

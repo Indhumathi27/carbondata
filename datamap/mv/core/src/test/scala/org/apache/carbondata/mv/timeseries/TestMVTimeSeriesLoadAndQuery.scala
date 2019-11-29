@@ -329,34 +329,76 @@ class TestMVTimeSeriesLoadAndQuery extends QueryTest with BeforeAndAfterAll {
     checkPlan("datamap1", df)
   }
 
-  test("test mv_timeseries for same event_column with different granularities") {
+  test("test mv_timeseries rollup 1") {
+//    drop()
 //    createTable()
 //    loadData("maintable")
-    sql("drop datamap if exists datamap1")
-    sql("drop datamap if exists datamap2")
-    sql(
-      "create datamap datamap1 on table maintable using 'mv' as " +
-      "select timeseries(projectjoindate,'second'),projectcode from maintable")
-    sql(
-      "create datamap datamap2 on table maintable using 'mv' as " +
-      "select timeseries(projectjoindate,'hour'),projectcode from maintable")
-//    sql("select timeseries(projectjoindate,'Hour'),projectcode from maintable").show(false)
-//    sql("explain select timeseries(projectjoindate,'Hour'),projectcode from maintable").show(false)
+//    sql("drop datamap if exists datamap1")
+//    sql("drop datamap if exists datamap2")
+//    sql(
+//      "create datamap datamap1 on table maintable using 'mv' as " +
+//      "select timeseries(projectjoindate,'second'),projectcode from maintable")
+//    sql(
+//      "create datamap datamap2 on table maintable using 'mv' as " +
+//      "select timeseries(projectjoindate,'hour'),projectcode from maintable")
+    sql("select timeseries(projectjoindate,'day'),projectcode  from maintable where timeseries(projectjoindate,'day')='2016-02-23 00:00:00'").show(false)
+//    sql("explain select timeseries(projectjoindate,'day'),projectcode from maintable").show(false)
 
+  }
 
-        sql("select timeseries(projectjoindate,'day'),projectcode from maintable").show(false)
-    sql("explain select timeseries(projectjoindate,'day'),projectcode from maintable").show(false)
-
-    //    sql("explain select timeseries(projectjoindate,'day'), sum(projectcode) from maintable group by timeseries(projectjoindate,'day')").show(false)
+  test("test mv_timeseries rollup 2") {
+//    drop()
+//    createTable()
+//    loadData("maintable")
+//    sql("drop datamap if exists datamap1")
+//    sql("drop datamap if exists datamap2")
+//    sql(
+//      "create datamap datamap1 on table maintable using 'mv' as " +
+//      "select timeseries(projectjoindate,'second'),sum(projectcode) from maintable group by timeseries(projectjoindate,'second')")
+//    sql(
+//      "create datamap datamap2 on table maintable using 'mv' as " +
+//      "select timeseries(projectjoindate,'hour'),sum(projectcode) from maintable group by timeseries(projectjoindate,'hour')")
+//        sql("drop datamap if exists datamap3")
+//    sql(
+//          "create datamap datamap3 on table maintable using 'mv' as " +
+//          "select timeseries(projectjoindate,'week'),sum(projectcode) from maintable group by timeseries(projectjoindate,'week')")
+    sql("select timeseries(projectjoindate,'minute'),sum(projectcode) from maintable group by timeseries(projectjoindate,'minute')").show(false)
+//    sql("explain select timeseries(projectjoindate,'minute'),sum(projectcode) from maintable group by timeseries(projectjoindate,'minute')").show(false)
 
   }
 
 
 
   test("test") {
-    createTable()
-    loadData("maintable")
+    sql(
+      "CREATE TABLE maintable_test (a int,b string, c int, d " +
+      "Timestamp) STORED BY 'org.apache.carbondata.format'")
+    sql("drop datamap if exists datamap1_test")
+    sql(
+          "create datamap datamap1_test on table maintable_test using 'mv' as " +
+          "select a,b,c from maintable_test group by a,b,c")
+    sql("select a,b from maintable_test group by a,b").show(false)
+
   }
+
+
+//  test("test mv_timeseries rollup 3") {
+//        drop()
+//        createTable()
+//        loadData("maintable")
+//        sql("drop datamap if exists datamap1")
+//        sql("drop datamap if exists datamap2")
+//        sql(
+//          "create datamap datamap1 on table maintable using 'mv' as " +
+//          "select timeseries(projectjoindate,'second'),sum(projectcode) from maintable group by timeseries(projectjoindate,'second')")
+//        sql(
+//          "create datamap datamap2 on table maintable using 'mv' as " +
+//          "select timeseries(projectjoindate,'hour'),sum(projectcode) from maintable group by timeseries(projectjoindate,'hour')")
+//
+//        sql("select timeseries(projectjoindate,'day'),sum(projectcode) from maintable group by timeseries(projectjoindate,'day')").show(false)
+//
+//  }
+
 
 
   override def afterAll(): Unit = {
