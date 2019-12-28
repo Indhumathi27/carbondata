@@ -46,9 +46,7 @@ import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.locks.CarbonLockUtil;
 import org.apache.carbondata.core.locks.ICarbonLock;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
-import org.apache.carbondata.core.metadata.ColumnIdentifier;
 import org.apache.carbondata.core.metadata.SegmentFileStore;
-import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
@@ -512,13 +510,6 @@ public final class CarbonLoaderUtil {
     Cache<DictionaryColumnUniqueIdentifier, Dictionary> dictCache =
         CacheProvider.getInstance().createCache(CacheType.REVERSE_DICTIONARY);
     return dictCache.get(columnIdentifier);
-  }
-
-  public static Dictionary getDictionary(AbsoluteTableIdentifier absoluteTableIdentifier,
-      ColumnIdentifier columnIdentifier, DataType dataType)
-      throws IOException {
-    return getDictionary(
-        new DictionaryColumnUniqueIdentifier(absoluteTableIdentifier, columnIdentifier, dataType));
   }
 
   /**

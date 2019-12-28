@@ -112,9 +112,6 @@ with Serializable {
       optionsFinal,
       model,
       conf)
-    model.setUseOnePass(options.getOrElse("onepass", "false").toBoolean)
-    model.setDictionaryServerHost(options.getOrElse("dicthost", null))
-    model.setDictionaryServerPort(options.getOrElse("dictport", "-1").toInt)
     CarbonTableOutputFormat.setOverwrite(conf, options("overwrite").toBoolean)
     model.setLoadWithoutConverterStep(true)
     val staticPartition = options.getOrElse("staticpartition", null)
@@ -320,10 +317,7 @@ private class CarbonOutputWriter(path: String,
       }
       if (staticPartition != null && staticPartition.get(col.getColumnName.toLowerCase)) {
         val converetedVal =
-          CarbonScalaUtil.convertStaticPartitions(
-            partitionData(index),
-            col,
-            model.getCarbonDataLoadSchema.getCarbonTable)
+          CarbonScalaUtil.convertStaticPartitions(partitionData(index), col)
         if (col.hasEncoding(Encoding.DICTIONARY)) {
           converetedVal.toInt.asInstanceOf[AnyRef]
         } else {
