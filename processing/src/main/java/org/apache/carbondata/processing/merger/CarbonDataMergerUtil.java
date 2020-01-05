@@ -359,7 +359,7 @@ public final class CarbonDataMergerUtil {
           try {
             dataMapSchema = DataMapStatusManager.getDataMapSchema(
                 carbonTable.getTableInfo().getFactTable().getTableProperties()
-                    .get(CarbonCommonConstants.DATAMAP_NAME));
+                    .get(CarbonCommonConstants.DATAMAP_NAME), carbonTable.getDatabaseName());
           } catch (NoSuchDataMapException e) {
             throw e;
           }

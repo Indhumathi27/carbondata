@@ -162,7 +162,14 @@ case class CarbonDropDataMapCommand(
     LOGGER.info("Trying to drop DataMap from system folder")
     try {
       if (dataMapSchema == null) {
-        dataMapSchema = DataMapStoreManager.getInstance().getDataMapSchema(dataMapName)
+        var database: String = null
+        if(table.isDefined) {
+          val databaseNameOp = table.get.database
+          database = CarbonEnv.getDatabaseName(databaseNameOp)(sparkSession)
+        } else {
+          database = sparkSession.sessionState.catalog.getCurrentDatabase
+        }
+        dataMapSchema = DataMapStoreManager.getInstance().getDataMapSchema(dataMapName, database)
       }
       if (dataMapSchema != null) {
         dataMapProvider =
@@ -173,7 +180,8 @@ case class CarbonDropDataMapCommand(
           UpdateDataMapPreExecutionEvent(sparkSession, systemFolderLocation, null)
         OperationListenerBus.getInstance().fireEvent(updateDataMapPreExecutionEvent,
           operationContext)
-        DataMapStatusManager.dropDataMap(dataMapSchema.getDataMapName)
+        DataMapStatusManager.dropDataMap(dataMapSchema.getDataMapName,
+          dataMapSchema.getRelationIdentifier.getDatabaseName)
         val updateDataMapPostExecutionEvent: UpdateDataMapPostExecutionEvent =
           UpdateDataMapPostExecutionEvent(sparkSession, systemFolderLocation, null)
         OperationListenerBus.getInstance().fireEvent(updateDataMapPostExecutionEvent,

@@ -103,6 +103,7 @@ object IndexDataMapRebuildRDD {
       new RefreshResultImpl(),
       carbonTable.getTableInfo,
       schema.getDataMapName,
+      carbonTable.getDatabaseName,
       indexedCarbonColumns.asScala.toArray,
       segments2DmStorePath.keySet
     ).collect
@@ -260,11 +261,13 @@ class IndexDataMapRebuildRDD[K, V](
     result: RefreshResult[K, V],
     @transient private val tableInfo: TableInfo,
     dataMapName: String,
+    databaseName: String,
     indexColumns: Array[CarbonColumn],
     segments: Set[Segment])
   extends CarbonRDDWithTableInfo[(K, V)](session, Nil, tableInfo.serialize()) {
 
-  private val dataMapSchema = DataMapStoreManager.getInstance().getDataMapSchema(dataMapName)
+  private val dataMapSchema = DataMapStoreManager.getInstance()
+    .getDataMapSchema(dataMapName, databaseName)
   private val queryId = sparkContext.getConf.get("queryId", System.nanoTime() + "")
   private val jobTrackerId: String = {
     val formatter = new SimpleDateFormat("yyyyMMddHHmm")

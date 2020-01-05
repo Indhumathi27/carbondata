@@ -32,7 +32,7 @@ import org.apache.carbondata.events.{UpdateDataMapPostExecutionEvent, _}
  * the datamap.
  */
 case class CarbonDataMapRebuildCommand(
-    dataMapName: String,
+    dataMapName: String, databaseName: String,
     tableIdentifier: Option[TableIdentifier]) extends DataCommand {
 
   override def processData(sparkSession: SparkSession): Seq[Row] = {
@@ -79,7 +79,7 @@ case class CarbonDataMapRebuildCommand(
         new TableIdentifier(table.getTableName, Some(table.getDatabaseName)))
     OperationListenerBus.getInstance().fireEvent(updateDataMapPreExecutionEvent,
       operationContext)
-    DataMapStatusManager.enableDataMap(dataMapName)
+    DataMapStatusManager.enableDataMap(dataMapName, databaseName)
     val updateDataMapPostExecutionEvent: UpdateDataMapPostExecutionEvent =
       new UpdateDataMapPostExecutionEvent(sparkSession,
         systemFolderLocation,

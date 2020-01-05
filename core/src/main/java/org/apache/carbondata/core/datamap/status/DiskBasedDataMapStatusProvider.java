@@ -41,6 +41,7 @@ import org.apache.carbondata.core.locks.CarbonLockUtil;
 import org.apache.carbondata.core.locks.ICarbonLock;
 import org.apache.carbondata.core.locks.LockUsage;
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
+import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 
@@ -61,27 +62,33 @@ public class DiskBasedDataMapStatusProvider implements DataMapStatusStorageProvi
 
   @Override
   public DataMapStatusDetail[] getDataMapStatusDetails() throws IOException {
+    String[] sysfol = CarbonProperties.getInstance()
+        .getProperty(CarbonCommonConstants.CARBON_SYSTEM_FOLDER_LOCATION_ACROSS_DATABASE).split(",");
     String statusPath = CarbonProperties.getInstance().getSystemFolderLocation()
         + CarbonCommonConstants.FILE_SEPARATOR + DATAMAP_STATUS_FILE;
-    Gson gsonObjectToRead = new Gson();
-    DataInputStream dataInputStream = null;
-    BufferedReader buffReader = null;
-    InputStreamReader inStream = null;
-    DataMapStatusDetail[] dataMapStatusDetails;
-    try {
-      if (!FileFactory.isFileExist(statusPath)) {
-        return new DataMapStatusDetail[0];
+    List<DataMapStatusDetail> dataMapStatusDetails =
+        new ArrayList<>(CarbonCommonConstants.DEFAULT_COLLECTION_SIZE);
+    for(String storePath: sysfol) {
+      statusPath = FileFactory.getUpdatedFilePath(storePath) + CarbonCommonConstants.FILE_SEPARATOR
+          + "_system" + CarbonCommonConstants.FILE_SEPARATOR + DATAMAP_STATUS_FILE;
+      Gson gsonObjectToRead = new Gson();
+      DataInputStream dataInputStream = null;
+      BufferedReader buffReader = null;
+      InputStreamReader inStream = null;
+      try {
+        if (!FileFactory.isFileExist(statusPath)) {
+          return new DataMapStatusDetail[0];
+        }
+        dataInputStream = FileFactory.getDataInputStream(statusPath);
+        inStream = new InputStreamReader(dataInputStream, Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET));
+        buffReader = new BufferedReader(inStream);
+        dataMapStatusDetails.addAll(Arrays.asList(gsonObjectToRead.fromJson(buffReader, DataMapStatusDetail[].class)));
+      } catch (IOException e) {
+        LOG.error("Failed to read datamap status", e);
+        throw e;
+      } finally {
+        CarbonUtil.closeStreams(buffReader, inStream, dataInputStream);
       }
-      dataInputStream = FileFactory.getDataInputStream(statusPath);
-      inStream = new InputStreamReader(dataInputStream,
-          Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET));
-      buffReader = new BufferedReader(inStream);
-      dataMapStatusDetails = gsonObjectToRead.fromJson(buffReader, DataMapStatusDetail[].class);
-    } catch (IOException e) {
-      LOG.error("Failed to read datamap status", e);
-      throw e;
-    } finally {
-      CarbonUtil.closeStreams(buffReader, inStream, dataInputStream);
     }
 
     // if dataMapStatusDetails is null, return empty array
@@ -89,7 +96,7 @@ public class DiskBasedDataMapStatusProvider implements DataMapStatusStorageProvi
       return new DataMapStatusDetail[0];
     }
 
-    return dataMapStatusDetails;
+    return dataMapStatusDetails.toArray(new DataMapStatusDetail[0]);
   }
 
   /**

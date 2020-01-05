@@ -73,7 +73,8 @@ case class CarbonIUDAnalysisRule(sparkSession: SparkSession) extends Rule[Logica
             .filter(dataMapSchema => null != dataMapSchema.getRelationIdentifier &&
                                      !dataMapSchema.isIndexDataMap).asJava
           allDataMapSchemas.asScala.foreach { dataMapSchema =>
-            DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
+            DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName,
+              dataMapSchema.getRelationIdentifier.getDatabaseName)
           }
         } else if (!indexSchemas.isEmpty) {
           throw new UnsupportedOperationException(
@@ -219,7 +220,8 @@ case class CarbonIUDAnalysisRule(sparkSession: SparkSession) extends Rule[Logica
               .filter(dataMapSchema => null != dataMapSchema.getRelationIdentifier &&
                                        !dataMapSchema.isIndexDataMap).asJava
             allDataMapSchemas.asScala.foreach { dataMapSchema =>
-              DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
+              DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName,
+                dataMapSchema.getRelationIdentifier.getDatabaseName)
             }
           } else if (!indexSchemas.isEmpty) {
             throw new UnsupportedOperationException(

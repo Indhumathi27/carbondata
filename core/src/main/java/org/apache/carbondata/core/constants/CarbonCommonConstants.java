@@ -379,6 +379,12 @@ public final class CarbonCommonConstants {
   public static final String CARBON_DATAMAP_SCHEMA_STORAGE_DATABASE = "DATABASE";
 
   /**
+   * System older location to store system level data like datamap schema and status files.
+   */
+  @CarbonProperty public static final String CARBON_SYSTEM_FOLDER_LOCATION_ACROSS_DATABASE =
+      "carbon.system.folder.location.across.database";
+
+  /**
    * It is internal configuration and used only for test purpose.
    * It will merge the carbon index files with in the segment to single segment.
    */

@@ -154,10 +154,12 @@ object LoadPostDataMapListener extends OperationEventListener {
               .getDataMapProvider(carbonTable, dataMapSchema, sparkSession)
             try {
               provider.rebuild()
-              DataMapStatusManager.enableDataMap(dataMapSchema.getDataMapName)
+              DataMapStatusManager.enableDataMap(dataMapSchema.getDataMapName,
+                dataMapSchema.getRelationIdentifier.getDatabaseName)
             } catch {
               case ex: Exception =>
-                DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
+                DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName,
+                  dataMapSchema.getRelationIdentifier.getDatabaseName)
             }
           }
         }

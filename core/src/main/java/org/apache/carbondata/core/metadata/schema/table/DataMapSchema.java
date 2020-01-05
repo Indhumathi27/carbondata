@@ -101,6 +101,11 @@ public class DataMapSchema implements Serializable, Writable {
     this.providerName = providerName;
   }
 
+  public DataMapSchema(String dataMapName, String providerName, String databaseName) {
+    this.dataMapName = dataMapName;
+    this.providerName = providerName;
+  }
+
   public DataMapSchema() {
   }
 

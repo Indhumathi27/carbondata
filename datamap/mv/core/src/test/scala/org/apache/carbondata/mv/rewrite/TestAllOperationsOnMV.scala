@@ -61,6 +61,26 @@ class TestAllOperationsOnMV extends QueryTest with BeforeAndAfterEach {
     sql("drop table if exists par_table")
   }
 
+  test("test") {
+//    sql("use indhu")
+    sql("drop table IF EXISTS maintable")
+    sql("create table maintable(name string, c_code int, price int) stored by 'carbondata'")
+    sql("drop datamap if exists dm1")
+    sql("create datamap default.dm1 using 'mv' as select name,sum(price) from maintable group by name")
+    sql("create database indhu")
+    sql("use indhu")
+    sql("drop table IF EXISTS maintable")
+    sql("create table maintable(name string, c_code int, price int) stored by 'carbondata'")
+    sql("insert into table maintable select 'abc',21,2000")
+    sql("drop datamap if exists dm1")
+    sql("create datamap indhu.dm1 using 'mv' as select name,sum(price) from maintable group by name")
+//    sql("show datamap").show(false)
+//    sql("drop datamap if exists dm1")
+    sql("explain select name,sum(price) from maintable group by name").show(false)
+    sql("explain select name,sum(price) from default.maintable group by name").show(false)
+
+  }
+
   test("test alter add column on maintable") {
     sql("alter table maintable add columns(d int)")
     sql("insert into table maintable select 'abc',21,2000,30")

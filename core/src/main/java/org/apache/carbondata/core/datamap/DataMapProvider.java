@@ -226,7 +226,7 @@ public abstract class DataMapProvider {
             "Not able to acquire the lock for Table status updation for table " + dataMapSchema
                 .getRelationIdentifier().getDatabaseName() + "." + dataMapSchema
                 .getRelationIdentifier().getTableName());
-        DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName());
+        DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName(), dataMapSchema.getRelationIdentifier().getDatabaseName());
         return false;
       }
     } finally {

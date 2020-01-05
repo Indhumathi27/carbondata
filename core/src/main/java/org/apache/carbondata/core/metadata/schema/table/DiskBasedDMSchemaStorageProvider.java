@@ -36,6 +36,7 @@ import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFileFilter;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
+import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 
 import com.google.gson.Gson;
@@ -59,9 +60,26 @@ public class DiskBasedDMSchemaStorageProvider implements DataMapSchemaStoragePro
 
   private Set<DataMapSchema> dataMapSchemas = new HashSet<>();
 
+  private Set<String> mdtFiles = new HashSet<>();
+
+  private Set<String> storePathList = new HashSet<>();
+
   public DiskBasedDMSchemaStorageProvider(String storePath) {
     this.storePath = CarbonUtil.checkAndAppendHDFSUrl(storePath);
     this.mdtFilePath = storePath + CarbonCommonConstants.FILE_SEPARATOR + "datamap.mdtfile";
+    initFiles();
+  }
+
+  public void initFiles() {
+    String sysFolder = CarbonProperties.getInstance()
+        .getProperty(CarbonCommonConstants.CARBON_SYSTEM_FOLDER_LOCATION_ACROSS_DATABASE);
+    String[] folders = sysFolder.split(",");
+    for (String storePathDB : folders) {
+      String newPath = FileFactory.getUpdatedFilePath(CarbonUtil.checkAndAppendHDFSUrl(storePathDB))
+          + CarbonCommonConstants.FILE_SEPARATOR + "_system";
+      this.storePathList.add(newPath);
+      this.mdtFiles.add((newPath + CarbonCommonConstants.FILE_SEPARATOR + "datamap.mdtfile"));
+    }
   }
 
   @Override
@@ -97,11 +115,12 @@ public class DiskBasedDMSchemaStorageProvider implements DataMapSchemaStoragePro
   }
 
   @Override
-  public DataMapSchema retrieveSchema(String dataMapName)
+  public DataMapSchema retrieveSchema(String dataMapName, String databaseName)
       throws IOException, NoSuchDataMapException {
     checkAndReloadDataMapSchemas(true);
     for (DataMapSchema dataMapSchema : dataMapSchemas) {
-      if (dataMapSchema.getDataMapName().equalsIgnoreCase(dataMapName)) {
+      if (dataMapSchema.getDataMapName().equalsIgnoreCase(dataMapName) && dataMapSchema
+          .getRelationIdentifier().getDatabaseName().equalsIgnoreCase(databaseName)) {
         return dataMapSchema;
       }
     }
@@ -110,7 +129,7 @@ public class DiskBasedDMSchemaStorageProvider implements DataMapSchemaStoragePro
 
   @Override
   public List<DataMapSchema> retrieveSchemas(CarbonTable carbonTable) throws IOException {
-    checkAndReloadDataMapSchemas(false);
+    checkAndReloadDataMapSchemas(true);
     List<DataMapSchema> dataMapSchemas = new ArrayList<>();
     for (DataMapSchema dataMapSchema : this.dataMapSchemas) {
       List<RelationIdentifier> parentTables = dataMapSchema.getParentTables();
@@ -138,30 +157,29 @@ public class DiskBasedDMSchemaStorageProvider implements DataMapSchemaStoragePro
 
   private Set<DataMapSchema> retrieveAllSchemasInternal() throws IOException {
     Set<DataMapSchema> dataMapSchemas = new HashSet<>();
-    CarbonFile carbonFile = FileFactory.getCarbonFile(storePath);
-    CarbonFile[] carbonFiles = carbonFile.listFiles(new CarbonFileFilter() {
-      @Override
-      public boolean accept(CarbonFile file) {
-        return file.getName().endsWith(".dmschema");
-      }
-    });
+    for (String storePath : storePathList) {
+      CarbonFile carbonFile = FileFactory.getCarbonFile(storePath);
+      CarbonFile[] carbonFiles = carbonFile.listFiles(new CarbonFileFilter() {
+        @Override public boolean accept(CarbonFile file) {
+          return file.getName().endsWith(".dmschema");
+        }
+      });
 
-    for (CarbonFile file :carbonFiles) {
-      Gson gsonObjectToRead = new Gson();
-      DataInputStream dataInputStream = null;
-      BufferedReader buffReader = null;
-      InputStreamReader inStream = null;
-      try {
-        String absolutePath = file.getAbsolutePath();
-        dataInputStream =
-            FileFactory.getDataInputStream(
-                absolutePath);
-        inStream = new InputStreamReader(dataInputStream,
-            Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET));
-        buffReader = new BufferedReader(inStream);
-        dataMapSchemas.add(gsonObjectToRead.fromJson(buffReader, DataMapSchema.class));
-      } finally {
-        CarbonUtil.closeStreams(buffReader, inStream, dataInputStream);
+      for (CarbonFile file : carbonFiles) {
+        Gson gsonObjectToRead = new Gson();
+        DataInputStream dataInputStream = null;
+        BufferedReader buffReader = null;
+        InputStreamReader inStream = null;
+        try {
+          String absolutePath = file.getAbsolutePath();
+          dataInputStream = FileFactory.getDataInputStream(absolutePath);
+          inStream = new InputStreamReader(dataInputStream,
+              Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET));
+          buffReader = new BufferedReader(inStream);
+          dataMapSchemas.add(gsonObjectToRead.fromJson(buffReader, DataMapSchema.class));
+        } finally {
+          CarbonUtil.closeStreams(buffReader, inStream, dataInputStream);
+        }
       }
     }
     return dataMapSchemas;
@@ -226,5 +244,14 @@ public class DiskBasedDMSchemaStorageProvider implements DataMapSchemaStoragePro
     String schemaPath =  storePath + CarbonCommonConstants.FILE_SEPARATOR + dataMapName
         + ".dmschema";
     return schemaPath;
+  }
+
+  public static void main(String[] args) {
+    DataMapSchema dm1 = new DataMapSchema("dm1", "mv");
+    DataMapSchema dm2 = new DataMapSchema("dm1","mv");
+    Set<DataMapSchema> se = new HashSet<>();
+    se.add(dm1);
+    se.add(dm2);
+    System.out.println(se.size());
   }
 }

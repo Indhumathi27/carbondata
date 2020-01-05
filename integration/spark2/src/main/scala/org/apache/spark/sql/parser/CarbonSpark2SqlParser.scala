@@ -163,15 +163,16 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
    * DMPROPERTIES('KEY'='VALUE') AS SELECT COUNT(COL1) FROM tableName
    */
   protected lazy val createDataMap: Parser[LogicalPlan] =
-    CREATE ~> DATAMAP ~> opt(IF ~> NOT ~> EXISTS) ~ ident ~
+    CREATE ~> DATAMAP ~> opt(IF ~> NOT ~> EXISTS) ~ (ident <~ ".") ~ ident ~
     opt(ontable) ~
     (USING ~> stringLit) ~
     opt(WITH ~> DEFERRED ~> REBUILD) ~
     (DMPROPERTIES ~> "(" ~> repsep(options, ",") <~ ")").? ~
     (AS ~> restInput).? <~ opt(";") ^^ {
-      case ifnotexists ~ dmname ~ tableIdent ~ dmProviderName ~ deferred ~ dmprops ~ query =>
+      case ifnotexists ~ database ~ dmname ~ tableIdent ~ dmProviderName ~ deferred ~
+           dmprops ~ query =>
         val map = dmprops.getOrElse(List[(String, String)]()).toMap[String, String]
-        CarbonCreateDataMapCommand(dmname, tableIdent, dmProviderName, map, query,
+        CarbonCreateDataMapCommand(dmname, database, tableIdent, dmProviderName, map, query,
           ifnotexists.isDefined, deferred.isDefined)
     }
 
@@ -206,9 +207,9 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
    * REBUILD DATAMAP datamapname [ON TABLE] tableName
    */
   protected lazy val refreshDataMap: Parser[LogicalPlan] =
-    REBUILD ~> DATAMAP ~> ident ~ opt(ontable) <~ opt(";") ^^ {
-      case datamap ~ tableIdent =>
-        CarbonDataMapRebuildCommand(datamap, tableIdent)
+    REBUILD ~> DATAMAP ~> (ident ~> ".") ~ ident ~ opt(ontable) <~ opt(";") ^^ {
+      case database ~ datamap ~ tableIdent =>
+        CarbonDataMapRebuildCommand(datamap, database, tableIdent)
     }
 
   protected lazy val alterDataMap: Parser[LogicalPlan] =

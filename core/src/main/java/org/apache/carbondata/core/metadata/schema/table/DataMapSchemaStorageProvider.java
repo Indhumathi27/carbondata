@@ -42,7 +42,8 @@ public interface DataMapSchemaStorageProvider {
    * Retrieve the schema by using dataMapName.
    * @param dataMapName
    */
-  DataMapSchema retrieveSchema(String dataMapName) throws IOException, NoSuchDataMapException;
+  DataMapSchema retrieveSchema(String dataMapName, String databaseName)
+      throws IOException, NoSuchDataMapException;
 
   /**
    * Retrieve schemas of the given table.

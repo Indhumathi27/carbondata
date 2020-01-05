@@ -167,10 +167,13 @@ private[mv] class SummaryDatasetCatalog(sparkSession: SparkSession)
   }
 
   /** Removes the given [[DataFrame]] from the catalog */
-  private[mv] def unregisterSchema(dataMapName: String): Unit = {
+  private[mv] def unregisterSchema(dataMapName: String, databaseName: String): Unit = {
     writeLock {
       val dataIndex = summaryDatasets
-        .indexWhere(sd => sd.dataMapSchema.getDataMapName.equals(dataMapName))
+        .indexWhere(sd => sd.dataMapSchema.getDataMapName.equals(dataMapName) && sd.dataMapSchema
+          .getRelationIdentifier
+          .getDatabaseName
+          .equals(databaseName))
       require(dataIndex >= 0, s"Datamap $dataMapName is not registered.")
       summaryDatasets.remove(dataIndex)
     }

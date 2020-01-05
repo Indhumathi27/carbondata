@@ -35,7 +35,7 @@ public interface DataMapCatalog<T> {
    * Unregister schema from catalog.
    * @param dataMapName
    */
-  void unregisterSchema(String dataMapName);
+  void unregisterSchema(String dataMapName, String databaseName);
 
   /**
    * List all registered valid schema catalogs

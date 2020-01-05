@@ -59,7 +59,7 @@ public class DiskBasedDMSchemaStoraheProviderSuite {
     provider.saveSchema(dataMapSchema);
     CarbonFile[] schemaFilesFromLocation = getSchemaFilesFromLocation();
     assert (existsSchema(dataMapSchema, schemaFilesFromLocation));
-    DataMapSchema dataMapSchema1 = provider.retrieveSchema("dm1");
+    DataMapSchema dataMapSchema1 = provider.retrieveSchema("dm1", "default");
     assert (dataMapSchema.getDataMapName().equals(dataMapSchema1.getDataMapName()));
   }
 
@@ -72,7 +72,7 @@ public class DiskBasedDMSchemaStoraheProviderSuite {
       assert (!file.getName().contains("dm2"));
     }
     try {
-      provider.retrieveSchema("dm2");
+      provider.retrieveSchema("dm2", "default");
       assert (false);
     } catch (NoSuchDataMapException e) {
       // Ignore

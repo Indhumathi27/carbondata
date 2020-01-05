@@ -40,6 +40,7 @@ import org.apache.carbondata.events._
  */
 case class CarbonCreateDataMapCommand(
     dataMapName: String,
+    databaseName: String,
     tableIdentifier: Option[TableIdentifier],
     dmProviderName: String,
     dmProperties: Map[String, String],
@@ -110,7 +111,10 @@ case class CarbonCreateDataMapCommand(
     }
     if (!dataMapSchema.isIndexDataMap) {
       if (DataMapStoreManager.getInstance().getAllDataMapSchemas.asScala
-        .exists(_.getDataMapName.equalsIgnoreCase(dataMapSchema.getDataMapName))) {
+        .exists(datamap => datamap.getDataMapName.equalsIgnoreCase(dataMapSchema.getDataMapName) &&
+                           datamap.getRelationIdentifier
+                             .getDatabaseName
+                             .equalsIgnoreCase(databaseName))) {
         if (!ifNotExistsSet) {
           throw new MalformedDataMapCommandException(
             "DataMap with name " + dataMapSchema.getDataMapName + " already exists in storage")
@@ -165,7 +169,7 @@ case class CarbonCreateDataMapCommand(
         OperationListenerBus.getInstance().fireEvent(createDataMapPreExecutionEvent,
           operationContext)
         dataMapProvider.initMeta(queryString.orNull)
-        DataMapStatusManager.disableDataMap(dataMapName)
+        DataMapStatusManager.disableDataMap(dataMapName, databaseName)
       case _ =>
         val createDataMapPreExecutionEvent: CreateDataMapPreExecutionEvent =
           CreateDataMapPreExecutionEvent(sparkSession,
@@ -196,7 +200,7 @@ case class CarbonCreateDataMapCommand(
               systemFolderLocation, tableIdentifier.get)
           OperationListenerBus.getInstance().fireEvent(updateDataMapPreExecutionEvent,
             operationContext)
-          DataMapStatusManager.enableDataMap(dataMapName)
+          DataMapStatusManager.enableDataMap(dataMapName, databaseName)
           val updateDataMapPostExecutionEvent: UpdateDataMapPostExecutionEvent =
             new UpdateDataMapPostExecutionEvent(sparkSession,
               systemFolderLocation, tableIdentifier.get)
@@ -206,7 +210,7 @@ case class CarbonCreateDataMapCommand(
       }
       if (null != dataMapSchema.getRelationIdentifier && !dataMapSchema.isIndexDataMap &&
           !dataMapSchema.isLazy) {
-        DataMapStatusManager.enableDataMap(dataMapName)
+        DataMapStatusManager.enableDataMap(dataMapName, databaseName)
       }
     }
     Seq.empty

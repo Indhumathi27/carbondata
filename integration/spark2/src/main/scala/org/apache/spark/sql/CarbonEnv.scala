@@ -122,8 +122,19 @@ class CarbonEnv {
         }
         CarbonProperties.getInstance
           .addNonSerializableProperty(CarbonCommonConstants.IS_DRIVER_INSTANCE, "true")
+        val systemFolderLocall = sparkSession.sessionState
+          .catalog
+          .listDatabases()
+          .map(CarbonEnv.getDatabaseLocation(_, sparkSession)).mkString(",")
+        CarbonProperties.getInstance()
+          .addProperty(CarbonCommonConstants.CARBON_SYSTEM_FOLDER_LOCATION_ACROSS_DATABASE,
+            systemFolderLocall)
+        val systemFolderLoc = CarbonEnv.getDatabaseLocation(sparkSession.catalog.currentDatabase,
+          sparkSession)
+        CarbonProperties.getInstance()
+          .addProperty(CarbonCommonConstants.CARBON_SYSTEM_FOLDER_LOCATION, systemFolderLoc)
         initialized = true
-        cleanChildTablesNotRegisteredInHive(sparkSession)
+//        cleanChildTablesNotRegisteredInHive(sparkSession)
       }
     }
     Profiler.initialize(sparkSession.sparkContext)

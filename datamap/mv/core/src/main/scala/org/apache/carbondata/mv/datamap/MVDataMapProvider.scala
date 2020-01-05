@@ -63,7 +63,8 @@ class MVDataMapProvider(
     try {
       DataMapStoreManager.getInstance.registerDataMapCatalog(this, dataMapSchema)
       if (dataMapSchema.isLazy) {
-        DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
+        DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName,
+          dataMapSchema.getRelationIdentifier.getDatabaseName)
       }
     } catch {
       case exception: Exception =>
@@ -80,7 +81,8 @@ class MVDataMapProvider(
   override def initData(): Unit = {
     if (!dataMapSchema.isLazy) {
       if (rebuild()) {
-        DataMapStatusManager.enableDataMap(dataMapSchema.getDataMapName)
+        DataMapStatusManager.enableDataMap(dataMapSchema.getDataMapName,
+          dataMapSchema.getRelationIdentifier.getDatabaseName)
       }
     }
   }
@@ -161,7 +163,8 @@ class MVDataMapProvider(
         case ex: Exception =>
           // If load to dataMap table fails, disable the dataMap and if newLoad is still
           // in INSERT_IN_PROGRESS state, mark for delete the newLoad and update table status file
-          DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName)
+          DataMapStatusManager.disableDataMap(dataMapSchema.getDataMapName,
+            dataMapSchema.getRelationIdentifier.getDatabaseName)
           LOGGER.error("Data Load failed for DataMap: ", ex)
           CarbonLoaderUtil.updateTableStatusInCaseOfFailure(
             newLoadName,

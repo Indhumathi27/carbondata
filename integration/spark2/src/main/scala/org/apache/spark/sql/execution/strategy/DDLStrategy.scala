@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.strategy
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, ReturnAnswer}
 import org.apache.spark.sql.execution.{SparkPlan, SparkStrategy}
@@ -30,8 +31,13 @@ import org.apache.spark.sql.execution.command.table.{CarbonCreateTableLikeComman
 import org.apache.spark.sql.execution.datasources.{InsertIntoHadoopFsRelationCommand, RefreshResource, RefreshTable}
 import org.apache.spark.sql.hive.execution.CreateHiveTableAsSelectCommand
 import org.apache.spark.sql.hive.execution.command.{CarbonDropDatabaseCommand, CarbonResetCommand, CarbonSetCommand, MatchResetCommand}
+import org.apache.spark.util.FileUtils
 
 import org.apache.carbondata.common.logging.LogServiceFactory
+import org.apache.carbondata.core.constants.CarbonCommonConstants
+import org.apache.carbondata.core.datamap.DataMapStoreManager
+import org.apache.carbondata.core.metadata.schema.table.DiskBasedDMSchemaStorageProvider
+import org.apache.carbondata.core.util.{CarbonProperties, DataTypeUtil, ThreadLocalSessionInfo}
 
 /**
  * Carbon strategies for ddl commands
@@ -187,6 +193,26 @@ class DDLStrategy(sparkSession: SparkSession) extends SparkStrategy {
         DDLHelper.refreshResource(refreshResource)
       // database
       case createDb: CreateDatabaseCommand =>
+        val dbLocation = try {
+          CarbonEnv.getDatabaseLocation(createDb.databaseName, sparkSession)
+        } catch {
+          case e: NoSuchDatabaseException =>
+            CarbonProperties.getStorePath
+        }
+        ThreadLocalSessionInfo
+          .setConfigurationToCurrentThread(sparkSession.sessionState.newHadoopConf())
+        FileUtils.createDatabaseDirectory(createDb.databaseName,
+          dbLocation,
+          sparkSession.sparkContext)
+        var value = CarbonProperties.getInstance()
+          .getProperty(CarbonCommonConstants.CARBON_SYSTEM_FOLDER_LOCATION_ACROSS_DATABASE)
+          .split(",")
+        value = value.+:(
+          dbLocation + CarbonCommonConstants.FILE_SEPARATOR + createDb.databaseName.toLowerCase +
+          ".db")
+        CarbonProperties.getInstance()
+          .addProperty(CarbonCommonConstants.CARBON_SYSTEM_FOLDER_LOCATION_ACROSS_DATABASE,
+            value.mkString(","))
         ExecutedCommandExec(DDLHelper.createDatabase(createDb, sparkSession)) :: Nil
       case drop@DropDatabaseCommand(dbName, ifExists, _)
         if CarbonEnv.databaseLocationExists(dbName, sparkSession, ifExists) =>
@@ -196,6 +222,17 @@ class DDLStrategy(sparkSession: SparkSession) extends SparkStrategy {
         DDLHelper.explain(explain, sparkSession)
       case showTables: ShowTablesCommand =>
         DDLHelper.showTables(showTables, sparkSession)
+      case use@SetDatabaseCommand(databaseName) =>
+        if (CarbonEnv.databaseLocationExists(databaseName, sparkSession, true)) {
+          val systemFolderLoc = CarbonEnv.getDatabaseLocation(databaseName, sparkSession)
+          CarbonProperties.getInstance()
+            .addProperty(CarbonCommonConstants.CARBON_SYSTEM_FOLDER_LOCATION, systemFolderLoc)
+          DataMapStoreManager.getInstance()
+            .updateProvider(new DiskBasedDMSchemaStorageProvider(CarbonProperties
+              .getInstance()
+              .getSystemFolderLocation))
+        }
+        ExecutedCommandExec(use) :: Nil
       case _ => Nil
     }
   }

@@ -94,8 +94,9 @@ public class DataMapStatusManager {
     return map;
   }
 
-  public static void disableDataMap(String dataMapName) throws IOException, NoSuchDataMapException {
-    DataMapSchema dataMapSchema = getDataMapSchema(dataMapName);
+  public static void disableDataMap(String dataMapName, String databaseName)
+      throws IOException, NoSuchDataMapException {
+    DataMapSchema dataMapSchema = getDataMapSchema(dataMapName, databaseName);
     if (dataMapSchema != null) {
       List<DataMapSchema> list = new ArrayList<>();
       list.add(dataMapSchema);
@@ -118,8 +119,9 @@ public class DataMapStatusManager {
     storageProvider.updateDataMapStatus(dataMapToBeDisabled, DataMapStatus.DISABLED);
   }
 
-  public static void enableDataMap(String dataMapName) throws IOException, NoSuchDataMapException {
-    DataMapSchema dataMapSchema = getDataMapSchema(dataMapName);
+  public static void enableDataMap(String dataMapName, String databaseName)
+      throws IOException, NoSuchDataMapException {
+    DataMapSchema dataMapSchema = getDataMapSchema(dataMapName, databaseName);
     if (dataMapSchema != null) {
       List<DataMapSchema> list = new ArrayList<>();
       list.add(dataMapSchema);
@@ -127,8 +129,9 @@ public class DataMapStatusManager {
     }
   }
 
-  public static void dropDataMap(String dataMapName) throws IOException, NoSuchDataMapException {
-    DataMapSchema dataMapSchema = getDataMapSchema(dataMapName);
+  public static void dropDataMap(String dataMapName, String databaseName)
+      throws IOException, NoSuchDataMapException {
+    DataMapSchema dataMapSchema = getDataMapSchema(dataMapName, databaseName);
     if (dataMapSchema != null) {
       List<DataMapSchema> list = new ArrayList<>();
       list.add(dataMapSchema);
@@ -136,9 +139,9 @@ public class DataMapStatusManager {
     }
   }
 
-  public static DataMapSchema getDataMapSchema(String dataMapName)
+  public static DataMapSchema getDataMapSchema(String dataMapName, String databaseName)
       throws IOException, NoSuchDataMapException {
-    return DataMapStoreManager.getInstance().getDataMapSchema(dataMapName);
+    return DataMapStoreManager.getInstance().getDataMapSchema(dataMapName, databaseName);
   }
 
   /**
@@ -152,7 +155,8 @@ public class DataMapStatusManager {
       throws IOException, NoSuchDataMapException {
     for (DataMapSchema datamapschema : allDataMapSchemas) {
       if (!datamapschema.isLazy()) {
-        disableDataMap(datamapschema.getDataMapName());
+        disableDataMap(datamapschema.getDataMapName(),
+            datamapschema.getRelationIdentifier().getDatabaseName());
       }
       RelationIdentifier dataMapRelationIdentifier = datamapschema.getRelationIdentifier();
       SegmentStatusManager segmentStatusManager = new SegmentStatusManager(AbsoluteTableIdentifier

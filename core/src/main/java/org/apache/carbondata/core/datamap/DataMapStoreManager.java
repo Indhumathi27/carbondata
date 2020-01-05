@@ -42,6 +42,7 @@ import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchemaFactory;
 import org.apache.carbondata.core.metadata.schema.table.DataMapSchemaStorageProvider;
+import org.apache.carbondata.core.metadata.schema.table.DiskBasedDMSchemaStorageProvider;
 import org.apache.carbondata.core.metadata.schema.table.RelationIdentifier;
 import org.apache.carbondata.core.mutate.SegmentUpdateDetails;
 import org.apache.carbondata.core.mutate.UpdateVO;
@@ -164,9 +165,9 @@ public final class DataMapStoreManager {
     return provider.retrieveAllSchemas();
   }
 
-  public DataMapSchema getDataMapSchema(String dataMapName)
+  public DataMapSchema getDataMapSchema(String dataMapName, String databaseName)
       throws NoSuchDataMapException, IOException {
-    return provider.retrieveSchema(dataMapName);
+    return provider.retrieveSchema(dataMapName, databaseName);
   }
 
   /**
@@ -261,7 +262,8 @@ public final class DataMapStoreManager {
     String name = dataMapSchema.getProviderName().toLowerCase();
     DataMapCatalog dataMapCatalog = dataMapCatalogs.get(name);
     if (dataMapCatalog != null) {
-      dataMapCatalog.unregisterSchema(dataMapSchema.getDataMapName());
+      dataMapCatalog.unregisterSchema(dataMapSchema.getDataMapName(),
+          dataMapSchema.getRelationIdentifier().getDatabaseName());
     }
   }
 
@@ -695,6 +697,10 @@ public final class DataMapStoreManager {
    */
   public static DataMapStoreManager getInstance() {
     return instance;
+  }
+
+  public void updateProvider(DiskBasedDMSchemaStorageProvider newProvider) {
+    this.provider = newProvider;
   }
 
   /**
