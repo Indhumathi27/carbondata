@@ -42,6 +42,7 @@ import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_
 import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_DATA_FILE_VERSION;
 import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_DATE_FORMAT;
 import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_DYNAMIC_ALLOCATION_SCHEDULER_TIMEOUT;
+import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES;
 import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_MINMAX_ALLOWED_BYTE_COUNT;
 import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_PREFETCH_BUFFERSIZE;
 import static org.apache.carbondata.core.constants.CarbonCommonConstants.CARBON_SCHEDULER_MIN_REGISTERED_RESOURCES_RATIO;
@@ -207,6 +208,9 @@ public final class CarbonProperties {
         break;
       case CarbonCommonConstants.CARBON_DATAMAP_SCHEMA_STORAGE:
         validateDMSchemaStorageProvider();
+        break;
+      case CarbonCommonConstants.CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES:
+        validateDurationForCacheExpiration();
         break;
       // TODO : Validation for carbon.lock.type should be handled for addProperty flow
       default:
@@ -1948,6 +1952,7 @@ public final class CarbonProperties {
   }
 
   /**
+<<<<<<< HEAD
    * Validate and get bad record handling for insert
    *
    * @return boolean
@@ -1960,6 +1965,36 @@ public final class CarbonProperties {
           .parseBoolean(CarbonCommonConstants.CARBON_ENABLE_BAD_RECORD_HANDLING_FOR_INSERT_DEFAULT);
     } else {
       return badRecordHandling.equalsIgnoreCase("true");
+    }
+  }
+
+  /*
+   * This method validates the duration for carbon cache expiration
+   */
+  private void validateDurationForCacheExpiration() {
+    String defaultValue = Long.toString(
+        CarbonCommonConstants.CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES_DEFAULT);
+    long duration;
+    try {
+      duration = Long.parseLong(
+          carbonProperties.getProperty(CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES));
+      if (duration < 0 || duration == 0) {
+        LOGGER.info("using default value of carbon.lru.cache.expiration.duration.in.minutes = "
+            + CarbonCommonConstants.CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES_DEFAULT);
+        carbonProperties
+            .setProperty(CarbonCommonConstants.CARBON_LOCAL_DICTIONARY_SIZE_THRESHOLD_IN_MB,
+                defaultValue);
+      } else {
+        LOGGER.info("using carbon.lru.cache.expiration.duration.in.minutes = " + duration);
+        carbonProperties
+            .setProperty(CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES, Long.toString(duration));
+      }
+    } catch (Exception e) {
+      LOGGER.info(String.format(
+          "The cache expiration duration for long type value \"%s\" is invalid. "
+              + "Using the default value \"%s\"", defaultValue,
+          CarbonCommonConstants.CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES_DEFAULT));
+      carbonProperties.setProperty(CARBON_LRU_CACHE_EXPIRATION_DURATION_IN_MINUTES, defaultValue);
     }
   }
 }
