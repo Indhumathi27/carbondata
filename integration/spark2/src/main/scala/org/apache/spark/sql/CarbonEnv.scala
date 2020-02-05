@@ -29,8 +29,9 @@ import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.sql.events.{MergeBloomIndexEventListener, MergeIndexEventListener}
 import org.apache.spark.sql.execution.command.timeseries.TimeSeriesFunction
 import org.apache.spark.sql.hive._
-import org.apache.spark.sql.listeners.{AlterDataMaptableCompactionPostListener, DataMapAddColumnsPreListener, DataMapAlterTableDropPartitionMetaListener, DataMapAlterTableDropPartitionPreStatusListener, DataMapChangeDataTypeorRenameColumnPreListener, DataMapDeleteSegmentPreListener, DataMapDropColumnPreListener, DropCacheBloomEventListener, DropCacheDataMapEventListener, LoadMVTablePreListener, LoadPostDataMapListener, PrePrimingEventListener, ShowCacheDataMapEventListener, ShowCachePreMVEventListener}
+import org.apache.spark.sql.listeners._
 import org.apache.spark.sql.profiler.Profiler
+import org.apache.spark.sql.secondaryindex.events._
 import org.apache.spark.util.CarbonReflectionUtils
 
 import org.apache.carbondata.common.logging.LogServiceFactory
@@ -43,7 +44,7 @@ import org.apache.carbondata.core.util._
 import org.apache.carbondata.datamap.{TextMatchMaxDocUDF, TextMatchUDF}
 import org.apache.carbondata.events._
 import org.apache.carbondata.geo.InPolygonUDF
-import org.apache.carbondata.processing.loading.events.LoadEvents.{LoadTablePostExecutionEvent, LoadTablePreExecutionEvent, LoadTablePreStatusUpdateEvent}
+import org.apache.carbondata.processing.loading.events.LoadEvents.{LoadTablePostExecutionEvent, LoadTablePostStatusUpdateEvent, LoadTablePreExecutionEvent, LoadTablePreStatusUpdateEvent}
 import org.apache.carbondata.spark.rdd.SparkReadSupport
 import org.apache.carbondata.spark.readsupport.SparkRowReadSupportImpl
 
@@ -243,6 +244,33 @@ object CarbonEnv {
         DataMapAlterTableDropPartitionMetaListener)
       .addListener(classOf[AlterTableDropPartitionPreStatusEvent],
         DataMapAlterTableDropPartitionPreStatusListener)
+      .addListener(classOf[LoadTablePreStatusUpdateEvent], new SILoadEventListener)
+      .addListener(classOf[LoadTablePostStatusUpdateEvent],
+        new SILoadEventListenerForFailedSegments)
+      .addListener(classOf[LookupRelationPostEvent], new SIRefreshEventListener)
+      // TODO: get create relation event
+      .addListener(classOf[CreateCarbonRelationPostEvent], new
+          CreateCarbonRelationEventListener
+      )
+      .addListener(classOf[DropTablePreEvent], new SIDropEventListener)
+      .addListener(classOf[AlterTableDropColumnPreEvent], new AlterTableDropColumnEventListener)
+      .addListener(classOf[AlterTableRenamePostEvent], new AlterTableRenameEventListener)
+      .addListener(classOf[AlterTableColRenameAndDataTypeChangePreEvent],
+        new AlterTableColumnRenameEventListener)
+      .addListener(classOf[AlterTableColRenameAndDataTypeChangePostEvent],
+        new AlterTableColumnRenameEventListener)
+      .addListener(classOf[DeleteSegmentByIdPostEvent], new DeleteSegmentByIdListener)
+      .addListener(classOf[DeleteSegmentByDatePostEvent], new DeleteSegmentByDateListener)
+      .addListener(classOf[CleanFilesPostEvent], new CleanFilesPostEventListener)
+      .addListener(classOf[AlterTableCompactionPreStatusUpdateEvent],
+        new AlterTableCompactionPostEventListener)
+      .addListener(classOf[AlterTableMergeIndexEvent],
+        new AlterTableMergeIndexSIEventListener)
+      .addListener(classOf[UpdateTablePreEvent], new UpdateTablePreEventListener)
+      .addListener(classOf[DeleteFromTablePostEvent], new DeleteFromTableEventListener)
+      .addListener(classOf[DeleteFromTablePreEvent], new DeleteFromTableEventListener)
+      .addListener(classOf[DropTableCacheEvent], DropCacheSIEventListener)
+      .addListener(classOf[ShowTableCacheEvent], ShowCacheSIEventListener)
   }
 
   /**
