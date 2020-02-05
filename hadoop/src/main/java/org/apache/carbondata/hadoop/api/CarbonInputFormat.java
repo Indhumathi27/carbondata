@@ -446,7 +446,7 @@ m filterExpression
     }
   }
 
-  protected DataMapFilter getFilterPredicates(Configuration configuration) {
+  public DataMapFilter getFilterPredicates(Configuration configuration) {
     try {
       String filterExprString = configuration.get(FILTER_PREDICATE);
       if (filterExprString == null) {
