@@ -118,6 +118,7 @@
     <module>integration/flink-proxy</module>
     <module>integration/presto</module>
     <module>examples/flink</module>
+    <module>secondary_index</module>
     <module>streaming</module>
     <module>geo</module>
   </modules>

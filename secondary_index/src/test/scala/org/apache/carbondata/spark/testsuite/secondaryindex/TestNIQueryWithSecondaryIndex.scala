@@ -1,19 +1,30 @@
-
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.carbondata.spark.testsuite.secondaryindex
 
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
 import org.apache.spark.sql.{CarbonDatasourceHadoopRelation, DataFrame, Row}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.common.util.QueryTest
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.util.CarbonInternalScalaUtil
-import org.apache.spark._
 
-import org.apache.carbondata.spark.core.CarbonCommonConstants
-/**
-  * Created by sWX420738 on 16-08-2017.
-  */
+import org.apache.carbondata.core.constants.CarbonCommonConstants
+
 class TestNIQueryWithSecondaryIndex extends QueryTest with BeforeAndAfterAll{
 
   var count1BeforeIndex : Array[Row] = null
@@ -22,8 +33,8 @@ class TestNIQueryWithSecondaryIndex extends QueryTest with BeforeAndAfterAll{
   override def beforeAll: Unit = {
     sql("drop table if exists seccust")
     sql("create table seccust (id string, c_custkey string, c_name string, c_address string, c_nationkey string, c_phone string,c_acctbal decimal, c_mktsegment string, c_comment string) STORED AS carbondata")
-    sql(s"""load data  inpath '${pluginResourcesPath}/secindex/firstunique.csv' into table seccust options('DELIMITER'='|','QUOTECHAR'='\"','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')""")
-    sql(s"""load data  inpath '${pluginResourcesPath}/secindex/secondunique.csv' into table seccust options('DELIMITER'='|','QUOTECHAR'='\"','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')""")
+    sql(s"""load data  inpath '${resourcesPath}/secindex/firstunique.csv' into table seccust options('DELIMITER'='|','QUOTECHAR'='\"','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')""")
+    sql(s"""load data  inpath '${resourcesPath}/secindex/secondunique.csv' into table seccust options('DELIMITER'='|','QUOTECHAR'='\"','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')""")
 
     count1BeforeIndex = sql("select count(*) from seccust where c_phone = '25-989-741-2988'").collect()
     count2BeforeIndex = sql("select count(*) from seccust where (c_mktsegment ='BUILDING' and c_phone ='25-989-741-2989')").collect()

@@ -303,7 +303,7 @@ class ErrorMessage(message: String) extends Exception(message) {
             sparkSession.sql(
               s"""CREATE TABLE $databaseName.$indexTableName
                  |(${fields.mkString(",")})
-                 |USING org.apache.spark.sql.CarbonSource OPTIONS (tableName "$indexTableName",
+                 |USING carbondata OPTIONS (tableName "$indexTableName",
                  |dbName "$databaseName", tablePath "$tablePath", path "$tablePath",
                  |parentTablePath "${carbonTable.getTablePath}", isIndexTable "true",
                  |isSITableEnabled "false", parentTableId

@@ -1,10 +1,26 @@
-
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.carbondata.spark.testsuite.secondaryindex
 
 import org.apache.carbondata.core.metadata.CarbonMetadata
 import org.apache.carbondata.spark.exception.ProcessMetaDataException
-import org.apache.spark.sql.common.util.QueryTest
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.secondaryindex.joins.BroadCastSIFilterPushJoin
+import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
 class TestAlterTableColumnRenameWithSecondaryIndex extends QueryTest with BeforeAndAfterAll {
@@ -27,8 +43,8 @@ class TestAlterTableColumnRenameWithSecondaryIndex extends QueryTest with Before
     sql("create index index1 on table si_rename(c) AS 'carbondata' ")
     sql("alter table si_rename change c test string")
     val carbonTable = CarbonMetadata.getInstance().getCarbonTable("default", "index1")
-    assert(null != carbonTable.getColumnByName("index1", "test"))
-    assert(null == carbonTable.getColumnByName("index1", "c"))
+    assert(null != carbonTable.getColumnByName("test"))
+    assert(null == carbonTable.getColumnByName("c"))
   }
 
   test("test column rename with multiple SI table table") {
@@ -39,11 +55,11 @@ class TestAlterTableColumnRenameWithSecondaryIndex extends QueryTest with Before
     sql("alter table si_rename change c test string")
     sql("alter table si_rename change d testSI string")
     val carbonTable1 = CarbonMetadata.getInstance().getCarbonTable("default", "index1")
-    assert(null != carbonTable1.getColumnByName("index1", "test"))
-    assert(null == carbonTable1.getColumnByName("index1", "c"))
+    assert(null != carbonTable1.getColumnByName("test"))
+    assert(null == carbonTable1.getColumnByName("c"))
     val carbonTable2 = CarbonMetadata.getInstance().getCarbonTable("default", "index2")
-    assert(null != carbonTable2.getColumnByName("index2", "testSI"))
-    assert(null == carbonTable2.getColumnByName("index2", "d"))
+    assert(null != carbonTable2.getColumnByName("testSI"))
+    assert(null == carbonTable2.getColumnByName("d"))
   }
 
   test("test column rename with SI tables load and query") {

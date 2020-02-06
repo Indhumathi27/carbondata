@@ -1,15 +1,30 @@
-
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.carbondata.spark.testsuite.secondaryindex
 
 import org.apache.spark.sql.{CarbonEnv, Row}
-import org.apache.spark.sql.common.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.spark.sql.hive.CarbonRelation
-import test.Spark2TestQueryExecutor
+import org.apache.spark.sql.test.Spark2TestQueryExecutor
+import org.apache.spark.sql.test.util.QueryTest
 
 import org.apache.carbondata.core.util.path.CarbonTablePath
 
@@ -20,10 +35,10 @@ class TestCreateIndexWithLoadAndCompaction extends QueryTest with BeforeAndAfter
 
   override def beforeAll {
     sql("drop table if exists index_test")
-    sql("CREATE TABLE index_test (integer_column1 string,date1 timestamp,date2 timestamp,ID int,string_column1 string,string_column2 string)STORED AS CARBONDATA TBLPROPERTIES('DICTIONARY_INCLUDE'='ID','DICTIONARY_EXCLUDE'='string_column1,string_column2,integer_column1')")
+    sql("CREATE TABLE index_test (integer_column1 string,date1 timestamp,date2 timestamp,ID int,string_column1 string,string_column2 string)STORED AS CARBONDATA TBLPROPERTIES('DICTIONARY_EXCLUDE'='string_column1,string_column2,integer_column1')")
     val currentFormat = CarbonProperties.getInstance().getProperty(CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT)
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT, "yyyy-MM-dd HH:mm:ss")
-    sql(s"LOAD DATA INPATH '$pluginResourcesPath/index.csv' into table index_test OPTIONS('DELIMITER'=',' ,'FILEHEADER'='ID,integer_column1,date1,date2,string_column1,string_column2')")
+    sql(s"LOAD DATA INPATH '$resourcesPath/secindex/index.csv' into table index_test OPTIONS('DELIMITER'=',' ,'FILEHEADER'='ID,integer_column1,date1,date2,string_column1,string_column2')")
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT, currentFormat)
   }
 
@@ -49,8 +64,7 @@ class TestCreateIndexWithLoadAndCompaction extends QueryTest with BeforeAndAfter
         "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
         "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
         "utilization int,salary int) STORED AS CARBONDATA " +
-        "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-        "'DICTIONARY_EXCLUDE'='empname')")
+        "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
     sql("drop index if exists index_no_dictionary on load_after_index")
     sql("create index index_no_dictionary on table load_after_index (empname) AS 'carbondata'")
     sql(s"LOAD DATA LOCAL INPATH '$resourcesPath/data.csv' INTO " +
@@ -67,8 +81,7 @@ class TestCreateIndexWithLoadAndCompaction extends QueryTest with BeforeAndAfter
         "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
         "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
         "utilization int,salary int) STORED AS CARBONDATA " +
-        "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-        "'DICTIONARY_EXCLUDE'='empname')")
+        "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
 
     sql(s"LOAD DATA LOCAL INPATH '$resourcesPath/data.csv' INTO " +
         "TABLE multiple_load OPTIONS('DELIMITER'=',', 'QUOTECHAR'='\"', 'BAD_RECORDS_LOGGER_ENABLE'='FALSE', 'BAD_RECORDS_ACTION'='FORCE')")
@@ -94,8 +107,7 @@ class TestCreateIndexWithLoadAndCompaction extends QueryTest with BeforeAndAfter
         "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
         "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
         "utilization int,salary int) STORED AS CARBONDATA " +
-        "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-        "'DICTIONARY_EXCLUDE'='empname')")
+        "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
 
     sql(s"LOAD DATA LOCAL INPATH '$resourcesPath/data.csv' INTO " +
         "TABLE compaction_load OPTIONS('DELIMITER'=',', 'QUOTECHAR'='\"', 'BAD_RECORDS_LOGGER_ENABLE'='FALSE', 'BAD_RECORDS_ACTION'='FORCE')")
@@ -120,8 +132,7 @@ class TestCreateIndexWithLoadAndCompaction extends QueryTest with BeforeAndAfter
 //        "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
 //        "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
 //        "utilization int,salary int) STORED AS CARBONDATA " +
-//        "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-//        "'DICTIONARY_EXCLUDE'='empname')")
+//        "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
 //
 //    sql("LOAD DATA LOCAL INPATH './src/test/resources/data.csv' INTO " +
 //        "TABLE auto_compaction_index OPTIONS('DELIMITER'=',', 'QUOTECHAR'='\"', 'BAD_RECORDS_LOGGER_ENABLE'='FALSE', 'BAD_RECORDS_ACTION'='FORCE')")
@@ -174,8 +185,8 @@ class TestCreateIndexWithLoadAndCompaction extends QueryTest with BeforeAndAfter
   test("Load from 2 csv's with unique value for index column and compare the query with or condition") {
     sql("drop table if exists seccust")
     sql("create table seccust (id string, c_custkey string, c_name string, c_address string, c_nationkey string, c_phone string,c_acctbal decimal, c_mktsegment string, c_comment string) STORED AS CARBONDATA")
-    sql(s"load data  inpath '$pluginResourcesPath/secindex/firstunique.csv' into table seccust options('DELIMITER'='|','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')")
-    sql(s"load data  inpath '$pluginResourcesPath/secindex/secondunique.csv' into table seccust options('DELIMITER'='|','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')")
+    sql(s"load data  inpath '$resourcesPath/secindex/firstunique.csv' into table seccust options('DELIMITER'='|','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')")
+    sql(s"load data  inpath '$resourcesPath/secindex/secondunique.csv' into table seccust options('DELIMITER'='|','FILEHEADER'='id,c_custkey,c_name,c_address,c_nationkey,c_phone,c_acctbal,c_mktsegment,c_comment')")
     val count1BeforeIndex = sql("select count(*) from seccust where c_phone = '25-989-741-2988' or c_mktsegment ='BUILDING'").collect
     val count2BeforeIndex = sql("select count(*) from seccust where (c_mktsegment ='BUILDING' and c_phone ='25-989-741-2989') or c_phone = '25-989-741-2988'").collect
 

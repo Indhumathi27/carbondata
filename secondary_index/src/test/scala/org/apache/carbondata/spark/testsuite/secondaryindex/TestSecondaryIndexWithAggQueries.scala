@@ -1,10 +1,25 @@
-
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.carbondata.spark.testsuite.secondaryindex
 
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.spark.sql.{CarbonEnv, Row}
-import org.apache.spark.sql.command.ErrorMessage
-import org.apache.spark.sql.common.util.QueryTest
+import org.apache.spark.sql.secondaryindex.command.ErrorMessage
+import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
 /**
@@ -18,7 +33,7 @@ class TestSecondaryIndexWithAggQueries extends QueryTest with BeforeAndAfterAll 
 
   test("test agg queries with secondary index") {
     sql("create table source (c1 string,c2 string,c3 string,c5 string) STORED AS CARBONDATA")
-    sql(s"""LOAD DATA LOCAL INPATH '$pluginResourcesPath/secindex/dest.csv' INTO table source""")
+    sql(s"""LOAD DATA LOCAL INPATH '$resourcesPath/secindex/dest.csv' INTO table source""")
    /* sql("create index index_source1 on table source (c2) AS 'carbondata'")
     checkAnswer(
       sql("select count(*) from source where c2='1' and c3 = 'aa' and c5 = 'aaa' "),
@@ -94,8 +109,8 @@ class TestSecondaryIndexWithAggQueries extends QueryTest with BeforeAndAfterAll 
   test("test datamap on SI table") {
     sql("drop table if exists test_si_1")
     sql(
-      "CREATE TABLE test_si_1 (id int,name string,salary float,dob date,address string)STORED AS " +
-      "carbondata  tblproperties('dictionary_include'='address')")
+      "CREATE TABLE test_si_1 (id int,name string,salary float,dob date,address string) STORED AS " +
+      "carbondata")
     sql("insert into test_si_1 select 1,'aa',23423.334,'2009-09-09','df'")
     sql("insert into test_si_1 select 2,'bb',4454.454,'2009-09-09','bang'")
     sql(
@@ -113,8 +128,8 @@ class TestSecondaryIndexWithAggQueries extends QueryTest with BeforeAndAfterAll 
   test("test datamap on pre-agg table") {
     sql("drop table if exists test_pre_agg")
     sql(
-      "CREATE TABLE test_pre_agg (id int,name string,salary float,dob date,address string)STORED AS " +
-      "carbondata  tblproperties('dictionary_include'='address')")
+      "CREATE TABLE test_pre_agg (id int,name string,salary float,dob date,address string) STORED AS " +
+      "carbondata")
     sql("insert into test_pre_agg select 1,'aa',23423.334,'2009-09-09','df'")
     sql("insert into test_pre_agg select 2,'bb',4454.454,'2009-09-09','bang'")
     sql(

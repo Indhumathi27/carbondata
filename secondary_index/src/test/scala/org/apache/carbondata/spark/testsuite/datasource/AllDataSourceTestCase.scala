@@ -24,8 +24,8 @@ import org.apache.spark.sql.{CarbonEnv, Row}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
-import org.apache.spark.sql.common.util.QueryTest
 import org.apache.spark.sql.execution.strategy.CarbonPlanHelper
+import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
@@ -121,7 +121,7 @@ class AllDataSourceTestCase extends QueryTest with BeforeAndAfterAll {
     val newSession = sqlContext.newSession()
     newSession.sql("use default")
     assert(CarbonEnv.carbonEnvMap.size() == 2)
-    newSession.sparkSession.closeSession()
+    newSession.sparkSession.close()
     assert(CarbonEnv.carbonEnvMap.size() == 1)
 
     val executors = Executors.newFixedThreadPool(2)
@@ -135,7 +135,7 @@ class AllDataSourceTestCase extends QueryTest with BeforeAndAfterAll {
           newSession1.sql(sqlText)
           ThreadLocalSessionInfo.shouldHaveCarbonConf()
           assert(CarbonEnv.carbonEnvMap.size() == 2)
-          newSession1.sparkSession.closeSession()
+          newSession1.sparkSession.close()
           assert(CarbonEnv.carbonEnvMap.size() == 1)
         }
       })

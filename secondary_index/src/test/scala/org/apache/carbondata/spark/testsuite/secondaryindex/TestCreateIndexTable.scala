@@ -1,14 +1,30 @@
-
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.carbondata.spark.testsuite.secondaryindex
 
-import org.apache.spark.sql.common.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.util.CarbonProperties
 import scala.collection.JavaConverters._
 
+import org.apache.spark.sql.test.util.QueryTest
+
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.format.TableInfo
-import org.apache.carbondata.spark.core.CarbonCommonConstants
 
 /**
  * test cases for testing create index table
@@ -22,8 +38,7 @@ class TestCreateIndexTable extends QueryTest with BeforeAndAfterAll {
         "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
         "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
         "utilization int,salary int) STORED AS carbondata " +
-        "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-        "'DICTIONARY_EXCLUDE'='empname')")
+        "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
     sql("drop table if exists createindextemptable")
     sql("drop table if exists createindextemptable1")
     sql("drop table if exists dropindextemptable")
@@ -186,26 +201,16 @@ class TestCreateIndexTable extends QueryTest with BeforeAndAfterAll {
      }
   }
 
-//  test("test create index table on no dictionary column") {
-//    try {
-//      sql("create index index_no_dictionary on table carbon (empname) AS 'carbondata'")
-//      assert(true)
-//    } catch {
-//      case ex: Exception =>
-//        assert(false)
-//    }
-//  }
-
-  test("test create index table on dictionary column") {
+  test("test create index table") {
     try {
-      sql("drop index if exists index_dictionary_1 on carbon")
-      sql("create index index_dictionary_1 on table carbon (workgroupcategory) AS 'carbondata'")
+      sql("drop index if exists index_1 on carbon")
+      sql("create index index_1 on table carbon (workgroupcategory) AS 'carbondata'")
       assert(true)
     } catch {
       case ex: Exception =>
         assert(false)
     } finally {
-      sql("drop index if exists index_dictionary_1 on carbon")
+      sql("drop index if exists index_1 on carbon")
      }
   }
 
@@ -272,8 +277,7 @@ class TestCreateIndexTable extends QueryTest with BeforeAndAfterAll {
         "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
         "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
         "utilization int,salary int) STORED AS CARBONDATA " +
-        "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-        "'DICTIONARY_EXCLUDE'='empname')")
+        "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
     sql(s"LOAD DATA LOCAL INPATH '$resourcesPath/data.csv' INTO " +
         "TABLE carbontable OPTIONS('DELIMITER'=',', 'BAD_RECORDS_LOGGER_ENABLE'='FALSE', 'BAD_RECORDS_ACTION'='FORCE')")
     val withoutIndex =
@@ -294,8 +298,7 @@ class TestCreateIndexTable extends QueryTest with BeforeAndAfterAll {
           "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
           "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
           "utilization int,salary int) STORED AS CARBONDATA " +
-          "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-          "'DICTIONARY_EXCLUDE'='empname')")
+          "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
     }catch  {
       case ex: Exception => assert(true)
     }
@@ -308,8 +311,7 @@ class TestCreateIndexTable extends QueryTest with BeforeAndAfterAll {
           "workgroupcategoryname String, deptno int, deptname String, projectcode int, " +
           "projectjoindate Timestamp, projectenddate Timestamp, attendance int, " +
           "utilization int,salary int) STORED AS CARBONDATA " +
-          "TBLPROPERTIES('DICTIONARY_INCLUDE'='empno,workgroupcategory,deptno,projectcode'," +
-          "'DICTIONARY_EXCLUDE'='empname')")
+          "TBLPROPERTIES('DICTIONARY_EXCLUDE'='empname')")
     }catch  {
       case ex: Exception => assert(true)
     }
@@ -430,7 +432,7 @@ class TestCreateIndexTable extends QueryTest with BeforeAndAfterAll {
         CarbonCommonConstants.HIGH_CARDINALITY_THRESHOLD_MIN.toString)
     sql("create table table1(a string, b string) stored as carbondata")
     sql("create index index1 on table table1(b) AS 'carbondata'")
-    sql(s"load data local inpath '$pluginResourcesPath/data_10000.csv' into table table1 options" +
+    sql(s"load data local inpath '$resourcesPath/secindex/data_10000.csv' into table table1 options" +
         s"('fileheader' = 'a,b', 'delimiter' = ',')")
     assert(!sql("describe formatted table1").collect()(0).get(2).toString.contains("DICTIONARY"))
     assert(!sql("describe formatted index1").collect()(0).get(2).toString.contains("DICTIONARY"))
@@ -504,8 +506,7 @@ class TestCreateIndexTable extends QueryTest with BeforeAndAfterAll {
     private def createAndInsertSecondaryIndex() {
     sql("drop table if exists test1")
     sql(
-      """create table test1 (name string, id decimal(3,2),country string) stored as carbondata
-        |TBLPROPERTIES('DICTIONARY_INCLUDE'='id') """.stripMargin)
+      """create table test1 (name string, id decimal(3,2),country string) stored as carbondata""".stripMargin)
     sql("""insert into test1 select 'xx',1.22 as a,'china'""")
     sql("""create index t_ind1 on table test1(id,country) AS 'carbondata'""")
   }
