@@ -127,6 +127,12 @@ object TestQueryExecutor {
   }
   createDirectory(badStoreLocation)
 
+  val pluginResourcesPath = if (hdfsUrl.startsWith("hdfs://")) {
+    hdfsUrl
+  } else {
+    s"$projectPath/secondary_index/src/test/resources"
+  }
+
   val hiveresultpath = if (hdfsUrl.startsWith("hdfs://")) {
     val p = s"$hdfsUrl/hiveresultpath"
     FileFactory.mkdirs(p)

@@ -23,7 +23,7 @@ trait TestQueryExecutorRegister {
   def sqlContext: SQLContext
 }
 
-object TestQueryExecutor {
+object Test2QueryExecutor {
 
   private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
 
@@ -120,9 +120,6 @@ object TestQueryExecutor {
     }
     jarsLocal
   }
-  CarbonProperties.getInstance()
-    .addProperty("spark.sql.extensions",
-      "org.apache.spark.sql.CarbonInternalExtensions")
   val INSTANCE = lookupQueryExecutor.newInstance().asInstanceOf[TestQueryExecutorRegister]
   CarbonProperties.getInstance()
     .addProperty(CarbonCommonConstants.CARBON_BAD_RECORDS_ACTION, "FORCE")

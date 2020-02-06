@@ -10,8 +10,8 @@ import scala.collection.JavaConversions._
 
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.util._
+import org.apache.spark.sql.test.Test2QueryExecutor
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.sql.test.TestQueryExecutor
 
 class QueryTest extends PlanTest {
 
@@ -79,15 +79,15 @@ class QueryTest extends PlanTest {
     checkAnswer(df, expectedAnswer.collect())
   }
 
-  def sql(sqlText: String): DataFrame = TestQueryExecutor.INSTANCE.sql(sqlText)
+  def sql(sqlText: String): DataFrame = Test2QueryExecutor.INSTANCE.sql(sqlText)
 
-  val sqlContext: SQLContext = TestQueryExecutor.INSTANCE.sqlContext
+  val sqlContext: SQLContext = Test2QueryExecutor.INSTANCE.sqlContext
 
-  val storeLocation = TestQueryExecutor.storeLocation.replaceAll("\\\\", "/")
-  val warehouse = TestQueryExecutor.warehouse.replaceAll("\\\\", "/")
-  val resourcesPath = TestQueryExecutor.resourcesPath.replaceAll("\\\\", "/")
-  val pluginResourcesPath = TestQueryExecutor.pluginResourcesPath.replaceAll("\\\\", "/")
-  val integrationPath = TestQueryExecutor.integrationPath.replaceAll("\\\\", "/")
+  val storeLocation = Test2QueryExecutor.storeLocation.replaceAll("\\\\", "/")
+  val warehouse = Test2QueryExecutor.warehouse.replaceAll("\\\\", "/")
+  val resourcesPath = Test2QueryExecutor.resourcesPath.replaceAll("\\\\", "/")
+  val pluginResourcesPath = Test2QueryExecutor.pluginResourcesPath.replaceAll("\\\\", "/")
+  val integrationPath = Test2QueryExecutor.integrationPath.replaceAll("\\\\", "/")
   val location = s"$integrationPath/spark-common/target/store_location"
 }
 

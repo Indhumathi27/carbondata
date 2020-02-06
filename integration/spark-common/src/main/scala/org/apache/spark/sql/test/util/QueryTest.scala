@@ -120,6 +120,7 @@ class QueryTest extends PlanTest {
   val metaStoreDB = TestQueryExecutor.metaStoreDB
   val integrationPath = TestQueryExecutor.integrationPath
   val dblocation = TestQueryExecutor.location
+  val pluginResourcesPath = TestQueryExecutor.pluginResourcesPath.replaceAll("\\\\", "/")
   val defaultParallelism = sqlContext.sparkContext.defaultParallelism
 }
 
