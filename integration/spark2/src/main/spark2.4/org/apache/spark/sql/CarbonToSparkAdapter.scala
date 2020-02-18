@@ -22,11 +22,11 @@ import java.net.URI
 import org.apache.spark.SparkContext
 import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationEnd}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, ExternalCatalogWithListener, SessionCatalog}
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, AttributeSet, ExprId, Expression, ExpressionSet, NamedExpression, ScalaUDF, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, AttributeSet, ExprId, Expression, ExpressionSet, NamedExpression, ScalaUDF, SubqueryExpression}
 import org.apache.spark.sql.catalyst.expressions.codegen._
 import org.apache.spark.sql.catalyst.expressions.codegen.Block._
 import org.apache.spark.sql.catalyst.optimizer.Optimizer
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, OneRowRelation}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, OneRowRelation, SubqueryAlias}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.ExplainCommand
 import org.apache.spark.sql.hive.{CarbonMVRules, HiveExternalCatalog}
@@ -158,6 +158,12 @@ object CarbonToSparkAdapter {
       map: Map[String, String],
       tablePath: String): CatalogStorageFormat = {
     storageFormat.copy(properties = map, locationUri = Some(new URI(tablePath)))
+  }
+
+  def getOutput(subQueryAlias: SubqueryAlias): Seq[Attribute] = {
+    var newAlias: Seq[String] = Seq.empty
+    newAlias = newAlias :+ subQueryAlias.name.identifier
+    subQueryAlias.child.output.map(_.withQualifier(newAlias))
   }
 
   def getHiveExternalCatalog(sparkSession: SparkSession) =

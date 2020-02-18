@@ -129,17 +129,17 @@ class MVUtil {
           }
           var qualifier: Option[String] = None
           if (attr.qualifier.nonEmpty) {
-            qualifier = if (attr.qualifier.headOption.get.startsWith("gen_sub")) {
+            qualifier = if (attr.qualifier.lastOption.get.startsWith("gen_sub")) {
               Some(carbonTable.getTableName)
             } else {
-              attr.qualifier.headOption
+              attr.qualifier.lastOption
             }
           }
           fieldToDataMapFieldMap +=
           getFieldToDataMapFields(
             attr.name,
             attr.dataType,
-            qualifier.headOption,
+            qualifier.lastOption,
             "",
             arrayBuffer,
             carbonTable.getTableName)
