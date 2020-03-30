@@ -20,19 +20,22 @@ package org.apache.carbondata.datamap.bloom
 import java.io.File
 import java.util.{Random, UUID}
 
+import scala.collection.JavaConverters._
+
 import org.apache.commons.io.FileUtils
-import org.apache.spark.sql.{CarbonEnv, SaveMode}
+import org.apache.spark.sql.{CarbonEnv, SaveMode, SparkSession}
 import org.apache.spark.sql.test.SparkTestQueryExecutor
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import org.apache.carbondata.core.constants.{CarbonCommonConstants, CarbonV3DataFormatConstants}
-import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import BloomCoarseGrainIndexTestUtil.deleteFile
 import BloomCoarseGrainIndexTestUtil.createFile
 import BloomCoarseGrainIndexTestUtil.checkBasicQuery
+import org.apache.carbondata.core.datamap.status.IndexStatus
+import org.apache.carbondata.core.metadata.index.CarbonIndexProvider
 
 class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterAll with BeforeAndAfterEach {
   val bigFile = s"$resourcesPath/bloom_datamap_function_test_big.csv"
@@ -77,8 +80,7 @@ class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterA
          | properties('BLOOM_SIZE'='640000')
       """.stripMargin)
 
-    var map = DataMapStatusManager.readDataMapStatusMap()
-    assert(map.get(indexName).isEnabled)
+    IndexStatusUtil.checkIndexStatus(bloomSampleTable, indexName, IndexStatus.ENABLED.name(), sqlContext.sparkSession, CarbonIndexProvider.BLOOMFILTER)
 
     sql(
       s"""
@@ -91,8 +93,7 @@ class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterA
          | OPTIONS('header'='false')
          """.stripMargin)
 
-    map = DataMapStatusManager.readDataMapStatusMap()
-    assert(map.get(indexName).isEnabled)
+    IndexStatusUtil.checkIndexStatus(bloomSampleTable, indexName, IndexStatus.ENABLED.name(), sqlContext.sparkSession, CarbonIndexProvider.BLOOMFILTER)
 
     sql(s"SHOW INDEXES ON TABLE $bloomSampleTable").show(false)
     checkExistence(sql(s"SHOW INDEXES ON TABLE $bloomSampleTable"), true, indexName)
@@ -125,8 +126,7 @@ class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterA
          | properties('BLOOM_SIZE'='640000')
       """.stripMargin)
 
-    var map = DataMapStatusManager.readDataMapStatusMap()
-    assert(map.get(indexName).isEnabled)
+    IndexStatusUtil.checkIndexStatus(bloomSampleTable, indexName, IndexStatus.ENABLED.name(), sqlContext.sparkSession, CarbonIndexProvider.BLOOMFILTER)
 
     sql(
       s"""
@@ -139,8 +139,7 @@ class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterA
          | OPTIONS('header'='false')
          """.stripMargin)
 
-    map = DataMapStatusManager.readDataMapStatusMap()
-    assert(map.get(indexName).isEnabled)
+    IndexStatusUtil.checkIndexStatus(bloomSampleTable, indexName, IndexStatus.ENABLED.name(), sqlContext.sparkSession, CarbonIndexProvider.BLOOMFILTER)
 
     sql(s"SHOW INDEXES ON TABLE $bloomSampleTable").show(false)
     checkExistence(sql(s"SHOW INDEXES ON TABLE $bloomSampleTable"), true, indexName)
@@ -172,8 +171,7 @@ class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterA
          | properties('BLOOM_SIZE'='640000')
       """.stripMargin)
 
-    var map = DataMapStatusManager.readDataMapStatusMap()
-    assert(map.get(indexName).isEnabled)
+    IndexStatusUtil.checkIndexStatus(bloomSampleTable, indexName, IndexStatus.ENABLED.name(), sqlContext.sparkSession, CarbonIndexProvider.BLOOMFILTER)
 
     sql(
       s"""
@@ -186,8 +184,7 @@ class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterA
          | OPTIONS('header'='false')
          """.stripMargin)
 
-    map = DataMapStatusManager.readDataMapStatusMap()
-    assert(map.get(indexName).isEnabled)
+    IndexStatusUtil.checkIndexStatus(bloomSampleTable, indexName, IndexStatus.ENABLED.name(), sqlContext.sparkSession, CarbonIndexProvider.BLOOMFILTER)
 
     sql(s"SHOW INDEXES ON TABLE $bloomSampleTable").show(false)
     checkExistence(sql(s"SHOW INDEXES ON TABLE $bloomSampleTable"), true, indexName)
@@ -872,5 +869,19 @@ class BloomCoarseGrainIndexFunctionSuite  extends QueryTest with BeforeAndAfterA
     deleteFile(bigFile)
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomSampleTable")
+  }
+}
+
+object IndexStatusUtil {
+  def checkIndexStatus(tableName: String,
+      indexName: String,
+      indexStatus: String,
+      sparkSession: SparkSession,
+      indexProvider: CarbonIndexProvider): Unit = {
+    val carbonTable = CarbonEnv.getCarbonTable(Some(CarbonCommonConstants.DATABASE_DEFAULT_NAME),
+      tableName)(sparkSession)
+    val indexes = carbonTable.getIndexMetadata.getIndexesMap.get(indexProvider.getIndexProviderName)
+      .asScala.filter(p => p._2.get(CarbonCommonConstants.INDEX_STATUS).equalsIgnoreCase(indexStatus))
+    assert(indexes.exists(p => p._1.equals(indexName) && p._2.get(CarbonCommonConstants.INDEX_STATUS) == indexStatus))
   }
 }
