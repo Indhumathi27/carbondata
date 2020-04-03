@@ -160,7 +160,7 @@ case class CarbonCreateMVCommand(
     val relatedTables = getRelatedTables(logicalPlan)
     val relatedTableList = toCarbonTables(session, relatedTables)
     val relatedTableNames = new util.ArrayList[String](relatedTableList.size())
-    // Check if load is in progress in any of the parent table mapped to the datamap
+    // Check if load is in progress in any of the parent table mapped to the indexSchema
     relatedTableList.asScala.foreach {
       table =>
         if (!table.getTableInfo.isTransactionalTable) {
@@ -205,7 +205,7 @@ case class CarbonCreateMVCommand(
       new SQLBuilder(modularPlan).SQLizer.execute(modularPlan), getLogicalRelation(logicalPlan))
     // If dataMap is mapped to single main table, then inherit table properties from main table,
     // else, will use default table properties. If DMProperties contains table properties, then
-    // table properties of datamap table will be updated
+    // table properties of indexSchema table will be updated
     if (relatedTableList.size() == 1 && CarbonSource.isCarbonDataSource(relatedTables.head)) {
       inheritTablePropertiesFromRelatedTable(
         relatedTableList.get(0),
@@ -276,7 +276,7 @@ case class CarbonCreateMVCommand(
       viewTableModel.ifNotExistsSet, Some(viewTablePath), isVisible = false).run(session)
 
     // Build and create mv schema
-    // Map list of main table columns mapped to MV table and add to dataMapSchema
+    // Map list of main table columns mapped to MV table and add to indexSchema
     val relatedTableToColumnsMap = new java.util.HashMap[String, util.Set[String]]()
     for (viewField <- fieldsMap.values) {
       viewField.relatedFieldList.foreach {

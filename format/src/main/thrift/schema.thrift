@@ -223,5 +223,5 @@ struct DataMapSchema  {
 struct TableInfo{
 	1: required TableSchema fact_table;
 	2: required list<TableSchema> aggregate_table_list;
-	3: optional list<DataMapSchema> dataMapSchemas; // childSchema information
+	3: optional list<IndexSchema> indexSchemas; // childSchema information
 }
