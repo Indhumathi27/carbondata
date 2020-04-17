@@ -217,40 +217,96 @@ release, user can do as following:
 Basically, user can manually trigger the operation by re-building the datamap.
 
 ## MV TimeSeries Support
-MV non-lazy datamap supports TimeSeries queries. Supported granularity strings are: year, month, week, day,
-hour,thirty_minute, fifteen_minute, ten_minute, five_minute, minute and second.
+Time series data are simply measurements or events that are tracked, monitored, downsampled, 
+and aggregated over time. Materialized views with automatic refresh mode supports TimeSeries queries.
 
- User can create MV datamap with timeseries queries like the below example:
+Carbondata provides built-in time-series udf with the below definition.
+
+```timeseries(event_time_column, 'granularity')```
+
+Event time columns provided in timeseries udf should be of TimeStamp/Date type.
+
+Below table describes the time hierarchy and levels that can be provided in a time-series udf, 
+so that it supports automatic roll-up in time dimension for query.
+
+| Granularity | Description |
+|---------------|----------------|
+| year | Data will be aggregated over year |
+| month |  Data will be aggregated over month  | 
+| week |  Data will be aggregated over week |
+| day |  Data will be aggregated over day |
+| hour |  Data will be aggregated over hour |
+| thirty_minute |   Data will be aggregated over every thirty minutes |
+| fifteen_minute |   Data will be aggregated over every fifteen minutes  |
+| ten_minute |  Data will be aggregated over every ten minutes  |
+| five_minute | Data will be aggregated over every five minutes|
+| minute |  Data will be aggregated over every one minute|
+| second |  Data will be aggregated over every second|
+
+Timeseries udf having column as Date type support's only year, month, day and week granularities.
+
+Below is the sample data loaded to the fact table **sales**
 
   ```
-  CREATE DATAMAP agg_sales
-  ON TABLE sales
-  USING "MV"
+  order_time,user_id,sex,country,quantity,price
+ 2016-02-23 09:01:30,c001,male,xxx,100,2
+ 2016-02-23 09:01:50,c002,male,yyy,200,5
+ 2016-02-23 09:03:30,c003,female,xxx,400,1
+ 2016-02-23 09:03:50,c004,male,yyy,300,5
+ 2016-02-23 09:07:50,c005,female,xxx,500,5
+  ```
+
+Users can create materialized views with timeseries queries like the below example:
+
+  ```
+  CREATE materialized view agg_sales
   AS
-    SELECT timeseries(order_time,'second'),avg(price)
+    SELECT timeseries(order_time,'minute'),avg(price)
     FROM sales
-    GROUP BY timeseries(order_time,'second')
+    GROUP BY timeseries(order_time,'minute')
   ```
-Supported columns that can be provided in timeseries udf should be of TimeStamp/Date type.
-Timeseries queries with Date type support's only year, month, day and week granularities.
+And execute the below query to check timeseries data. In this example, a materialized view of 
+aggregated table on price column will be created, which will be aggregated on every one minute.
+
+  ```
+  SELECT timeseries(order_time,'minute'),avg(price)
+  FROM sales
+  GROUP BY timeseries(order_time,'minute')
+  ```
+Find below the result of above query aggregated over minute.
+
+  ```
++---------------------------------------+----------------+
+|UDF:timeseries(projectjoindate, minute)|avg(projectcode)|
++---------------------------------------+----------------+
+|2016-02-23 09:01:00                    |3.5             |
+|2016-02-23 09:07:00                    |5.0             |
+|2016-02-23 09:03:00                    |3.0             |
++---------------------------------------+----------------+
+  ```
+
+The data loading, querying, compaction command and its behavior is the same as materialized views.
+
+#### How data is aggregated over time?
+On each load to materialized view, data will be aggregated based on the specified time interval of 
+granularity provided during creation and stored on each segment.
 
  **NOTE**:
  1. Single select statement cannot contain timeseries udf(s) neither with different granularity nor
  with different timestamp/date columns.
+ 2. Retention policies for timeseries is not supported yet.
  
  ## MV TimeSeries RollUp Support
-  MV Timeseries queries can be rolledUp from existing mv datamaps.
+  MV Timeseries queries can be rolledUp from existing materialized views.
   ### Query RollUp
- Consider an example where the query is on hour level granularity, but the datamap
- of hour is not present but  minute level datamap is present, then we can get the data
- from minute level and the aggregate the hour level data and give output.
- This is called query rollup.
+ Consider an example where the query is on hour level granularity, but the materialized view
+ with hour level granularity is not present but materialized view with minute level granularity is 
+ present, then we can get the data from minute level and the aggregate the hour level data and 
+ give output. This is called query rollup.
  
  Consider if user create's below timeseries datamap,
    ```
-   CREATE DATAMAP agg_sales
-   ON TABLE sales
-   USING "MV"
+   CREATE materialized view  agg_sales
    AS
      SELECT timeseries(order_time,'minute'),avg(price)
      FROM sales
@@ -262,9 +318,9 @@ Timeseries queries with Date type support's only year, month, day and week granu
     FROM sales
     GROUP BY timeseries(order_time,'hour')
    ```
- Then, the above query can be rolled up from 'agg_sales' mv datamap, by adding hour
+ Then, the above query can be rolled up from 'agg_sales' mv, by adding hour
  level timeseries aggregation on minute level datamap. Users can fire explain command
- to check if query is rolled up from existing mv datamaps.
+ to check if query is rolled up from existing materilaized views.
  
   **NOTE**:
   1. Queries cannot be rolled up, if filter contains timeseries function.
