@@ -214,9 +214,7 @@ public class IndexUtil {
       boolean isJobToClearIndexes) {
     try {
       Constructor<?> cons = Class.forName(clsName).getDeclaredConstructors()[0];
-      return (FileInputFormat) cons
-          .newInstance(carbonTable, indexExprWrapper, validsegments, invalidSegments,
-              partitionsToPrune, isJobToClearIndexes);
+      return (FileInputFormat) cons.newInstance(carbonTable, indexExprWrapper, validsegments);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
