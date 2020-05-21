@@ -47,6 +47,30 @@ class TestCompactionComplexType extends QueryTest with BeforeAndAfterAll {
     sql("DROP TABLE IF EXISTS compactComplex")
   }
 
+  test("complex issue") {
+    sql("drop table if exists complex1")
+    sql("create table complex1 (arr array<String>) stored as carbondata")
+    sql("insert into complex1 select array('as') union all " +
+        "select array('sd','df','gh') union all " +
+        "select array('rt','ew','rtyu','jk','sder') union all " +
+        "select array('ghsf','dbv','fg','ty') union all " +
+        "select array('hjsd','fggb','nhj','sd','asd')")
+
+    sql("select * from complex1").show(200, false)
+
+    sql(" explain select * from complex1 where array_contains(arr,'sd')").show(200, false)
+
+    sql(" select * from complex1 where array_contains(arr,'sd')").show(200, false)
+
+    sql(" EXPLAIN select count(*) from complex1 where array_contains(arr,'sd')").show(200, false)
+
+    sql(" select count(*) from complex1 where array_contains(arr,'sd')").show(200, false)
+
+    // should allow push down for only array of primitive type, test other primitive type also
+
+    sql("drop table complex1")
+  }
+
   test("test INT with struct and array, Encoding INT-->BYTE") {
     sql("Drop table if exists adaptive")
     sql(

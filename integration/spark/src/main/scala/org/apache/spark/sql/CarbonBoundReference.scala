@@ -35,3 +35,7 @@ case class CarbonEndsWith(expr: Expression) extends Filter {
 case class CarbonContainsWith(expr: Expression) extends Filter {
   override def references: Array[String] = null
 }
+
+case class CarbonArrayContains(expr: Expression) extends Filter {
+  override def references: Array[String] = null
+}
