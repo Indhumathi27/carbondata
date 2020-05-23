@@ -115,12 +115,27 @@ public class StructQueryType extends ComplexQueryType implements GenericQueryTyp
 
   @Override
   public Object getDataBasedOnDataType(ByteBuffer dataBuffer) {
+    return getDataBasedOnDataType(dataBuffer, false);
+  }
+
+  @Override
+  public Object getDataBasedOnDataType(ByteBuffer dataBuffer, boolean getBytesData) {
     int childLength = dataBuffer.getShort();
     Object[] fields = new Object[childLength];
     for (int i = 0; i < childLength; i++) {
-      fields[i] =  children.get(i).getDataBasedOnDataType(dataBuffer);
+      fields[i] =  children.get(i).getDataBasedOnDataType(dataBuffer, false);
     }
     return DataTypeUtil.getDataTypeConverter().wrapWithGenericRow(fields);
+  }
+
+  @Override
+  public Object[] getObjectArrayDataBasedOnDataType(ByteBuffer dataBuffer) {
+    int childLength = dataBuffer.getShort();
+    Object[] fields = new Object[childLength];
+    for (int i = 0; i < childLength; i++) {
+      fields[i] =  children.get(i).getDataBasedOnDataType(dataBuffer, true);
+    }
+    return fields;
   }
 
   @Override
@@ -139,7 +154,7 @@ public class StructQueryType extends ComplexQueryType implements GenericQueryTyp
       return null;
     } else {
       //      childLength = dataBuffer.getShort();
-      Object field = getDataBasedOnDataType(dataBuffer);
+      Object field = getDataBasedOnDataType(dataBuffer, false);
       return field;
     }
   }
@@ -153,7 +168,7 @@ public class StructQueryType extends ComplexQueryType implements GenericQueryTyp
       if (presentColumn.getNumberOfChild() > 0) {
         // This is complex Column. And all its child will be present in the corresponding data
         // buffer.
-        Object field = getDataBasedOnDataType(childBuffer.get(presentColumn));
+        Object field = getDataBasedOnDataType(childBuffer.get(presentColumn), false);
         return field;
       } else {
         // This is a child column with with primitive data type.
