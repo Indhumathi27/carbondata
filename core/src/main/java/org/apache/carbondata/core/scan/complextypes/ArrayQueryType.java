@@ -39,7 +39,7 @@ public class ArrayQueryType extends ComplexQueryType implements GenericQueryType
 
   @Override
   public void addChildren(GenericQueryType children) {
-    if (this.getName().equals(children.getParentName())) {
+    if (null == this.getName() || this.getName().equals(children.getParentName())) {
       this.children = children;
     } else {
       this.children.addChildren(children);
@@ -97,21 +97,35 @@ public class ArrayQueryType extends ComplexQueryType implements GenericQueryType
 
   @Override
   public Object getDataBasedOnDataType(ByteBuffer dataBuffer) {
-    Object[] data = fillData(dataBuffer);
+    return getDataBasedOnDataType(dataBuffer, false);
+  }
+
+  @Override
+  public Object getDataBasedOnDataType(ByteBuffer dataBuffer, boolean getBytesData) {
+    Object[] data = fillData(dataBuffer, false);
     if (data == null) {
       return null;
     }
     return DataTypeUtil.getDataTypeConverter().wrapWithGenericArrayData(data);
   }
 
-  protected Object[] fillData(ByteBuffer dataBuffer) {
+  @Override
+  public Object[] getObjectArrayDataBasedOnDataType(ByteBuffer dataBuffer) {
+    Object[] data = fillData(dataBuffer, true);
+    if (data == null) {
+      return null;
+    }
+    return data;
+  }
+
+  protected Object[] fillData(ByteBuffer dataBuffer, boolean getBytesData) {
     int dataLength = dataBuffer.getInt();
     if (dataLength == -1) {
       return null;
     }
     Object[] data = new Object[dataLength];
     for (int i = 0; i < dataLength; i++) {
-      data[i] = children.getDataBasedOnDataType(dataBuffer);
+      data[i] = children.getDataBasedOnDataType(dataBuffer, getBytesData);
     }
     return data;
   }

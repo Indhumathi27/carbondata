@@ -23,10 +23,10 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.apache.log4j.Logger
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql._
+import org.apache.spark.sql.{types, _}
 import org.apache.spark.sql.CarbonExpressions.{MatchCast => Cast}
 import org.apache.spark.sql.carbondata.execution.datasources.{CarbonFileIndex, CarbonSparkDataSourceUtil}
-import org.apache.spark.sql.catalyst.{expressions, InternalRow}
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, _}
 import org.apache.spark.sql.catalyst.planning.{ExtractEquiJoinKeys, PhysicalOperation}
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftSemi}
@@ -517,7 +517,8 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       val supportBatch =
         supportBatchedDataSource(relation.relation.sqlContext,
           updateRequestedColumns) && extraRdd.getOrElse((null, true))._2
-      if (!vectorPushRowFilters && !supportBatch && !implicitExisted) {
+      if (!vectorPushRowFilters && !supportBatch && !implicitExisted && filterSet.nonEmpty &&
+          !filterSet.baseSet.exists(_.a.dataType.isInstanceOf[ArrayType])) {
         // revert for row scan
         updateRequestedColumns = requestedColumns
       }
@@ -679,10 +680,10 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     // In case of ComplexType dataTypes no filters should be pushed down. IsNotNull is being
     // explicitly added by spark and pushed. That also has to be handled and pushed back to
     // Spark for handling.
-    val predicatesWithoutComplex = predicates.filter(predicate =>
-      predicate.collect {
-      case a: Attribute if isComplexAttribute(a) => a
-    }.size == 0 )
+    //    val predicatesWithoutComplex = predicates.filter(predicate =>
+    //      predicate.collect {
+    //      case a: Attribute if isComplexAttribute(a) => a
+    //    }.size == 0 )
 
     // For conciseness, all Catalyst filter expressions of type `expressions.Expression` below are
     // called `predicate`s, while all data source filters of type `sources.Filter` are simply called
@@ -690,7 +691,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     // Todo: handle when lucene and normal query filter is supported
 
     var count = 0
-    val translated: Seq[(Expression, Filter)] = predicatesWithoutComplex.flatMap {
+    val translated: Seq[(Expression, Filter)] = predicates.flatMap {
       predicate =>
         if (predicate.isInstanceOf[ScalaUDF]) {
           predicate match {
@@ -865,6 +866,8 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         Some(CarbonContainsWith(c))
       case c@Literal(v, t) if (v == null) =>
         Some(FalseExpr())
+      case c@ArrayContains(a: Attribute, Literal(v, t)) =>
+        Some(CarbonArrayContains(c))
       case others => None
     }
   }

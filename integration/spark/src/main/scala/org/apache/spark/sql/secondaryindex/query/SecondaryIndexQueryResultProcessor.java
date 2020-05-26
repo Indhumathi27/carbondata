@@ -16,8 +16,11 @@
  */
 package org.apache.spark.sql.secondaryindex.query;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.carbondata.common.CarbonIterator;
 import org.apache.carbondata.common.logging.LogServiceFactory;
@@ -31,8 +34,14 @@ import org.apache.carbondata.core.metadata.encoder.Encoding;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonDimension;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
+import org.apache.carbondata.core.scan.complextypes.ArrayQueryType;
+import org.apache.carbondata.core.scan.complextypes.PrimitiveQueryType;
+import org.apache.carbondata.core.scan.executor.infos.BlockExecutionInfo;
+import org.apache.carbondata.core.scan.filter.GenericQueryType;
 import org.apache.carbondata.core.scan.result.RowBatch;
+import org.apache.carbondata.core.scan.result.iterator.DetailQueryResultIterator;
 import org.apache.carbondata.core.scan.wrappers.ByteArrayWrapper;
+import org.apache.carbondata.core.util.ByteUtil;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.DataTypeUtil;
@@ -53,6 +62,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.sql.secondaryindex.exception.SecondaryIndexException;
 import org.apache.spark.sql.secondaryindex.load.RowComparatorWithOutKettle;
 import org.apache.spark.sql.secondaryindex.util.SecondaryIndexUtil;
+import org.apache.spark.unsafe.types.UTF8String;
 
 /**
  * This class will process the query result and convert the data
@@ -225,9 +235,18 @@ public class SecondaryIndexQueryResultProcessor {
       throws SecondaryIndexException {
     for (CarbonIterator<RowBatch> detailQueryIterator : detailQueryResultIteratorList) {
       while (detailQueryIterator.hasNext()) {
+        // get complex dimension info map from block execution info
+        DetailQueryResultIterator detailQueryIterator1 =
+            (DetailQueryResultIterator) detailQueryIterator;
+        BlockExecutionInfo blockExecutionInfo = detailQueryIterator1.getInfos().get(0);
+        Map<Integer, GenericQueryType> complexDimensionInfoMap =
+            blockExecutionInfo.getComlexDimensionInfoMap();
+        int[] complexColumnParentBlockIndexes =
+            blockExecutionInfo.getComplexColumnParentBlockIndexes();
         RowBatch batchResult = detailQueryIterator.next();
         while (batchResult.hasNext()) {
-          addRowForSorting(prepareRowObjectForSorting(batchResult.next()));
+          addRowForSorting(prepareRowObjectForSorting(batchResult.next(), complexDimensionInfoMap,
+              complexColumnParentBlockIndexes));
           isRecordFound = true;
         }
       }
@@ -246,9 +265,11 @@ public class SecondaryIndexQueryResultProcessor {
    * This method will prepare the data from raw object that will take part in sorting
    *
    */
-  private Object[] prepareRowObjectForSorting(Object[] row) {
+  private Object[] prepareRowObjectForSorting(Object[] row,
+      Map<Integer, GenericQueryType> complexDimensionInfoMap, int[] complexColumnParentBlockIndexes)
+      throws SecondaryIndexException {
     ByteArrayWrapper wrapper = (ByteArrayWrapper) row[0];
-    // ByteBuffer[] noDictionaryBuffer = new ByteBuffer[noDictionaryCount];
+    byte[] implicitColumnByteArray = wrapper.getImplicitColumnByteArray();
 
     List<CarbonDimension> dimensions = segmentProperties.getDimensions();
     Object[] preparedRow = new Object[dimensions.size() + measureCount];
@@ -257,20 +278,20 @@ public class SecondaryIndexQueryResultProcessor {
     int dictionaryIndex = 0;
     int i = 0;
     // loop excluding last dimension as last one is implicit column.
-    for (; i < dimensions.size() - 1; i++) {
+    for (; i < dimensions.size() - 1 - wrapper.getComplexTypesKeys().length; i++) {
       CarbonDimension dims = dimensions.get(i);
       if (dims.hasEncoding(Encoding.DICTIONARY)) {
         // dictionary
         preparedRow[i] = factToIndexDictColumnMapping[dictionaryIndex++];
-      } else {
+      } else if (wrapper.getNoDictionaryKeys().length != 0) {
         // no dictionary dims
         byte[] noDictionaryKeyByIndex = wrapper.getNoDictionaryKeyByIndex(noDictionaryIndex++);
         // no dictionary primitive columns are expected to be in original data while loading,
         // so convert it to original data
         if (DataTypeUtil.isPrimitiveColumn(dims.getDataType())) {
           Object dataFromBytes = DataTypeUtil
-              .getDataBasedOnDataTypeForNoDictionaryColumn(noDictionaryKeyByIndex,
-                  dims.getDataType());
+                  .getDataBasedOnDataTypeForNoDictionaryColumn(noDictionaryKeyByIndex,
+                          dims.getDataType());
           if (null != dataFromBytes && dims.getDataType() == DataTypes.TIMESTAMP) {
             dataFromBytes = (long) dataFromBytes / 1000L;
           }
@@ -281,10 +302,41 @@ public class SecondaryIndexQueryResultProcessor {
       }
     }
 
+    // In case of complex array type, flatten the data and add for sorting
+    // TODO: Handle for nested array and other complex types
+    for (int k = 0; k < wrapper.getComplexTypesKeys().length; k++) {
+      byte[] complexKeyByIndex = wrapper.getComplexKeyByIndex(k);
+      ByteBuffer byteArrayInput = ByteBuffer.wrap(complexKeyByIndex);
+      GenericQueryType genericQueryType =
+              complexDimensionInfoMap.get(complexColumnParentBlockIndexes[k]);
+      short length = byteArrayInput.getShort(2);
+      // get flattened array data
+      Object[] data = genericQueryType.getObjectArrayDataBasedOnDataType(byteArrayInput);
+      if (length != 1) {
+        for (int j = 1; j < length; j++) {
+          preparedRow[i] = getData(data, j);
+          preparedRow[i + 1] = implicitColumnByteArray;
+          addRowForSorting(preparedRow.clone());
+        }
+        // add first row
+        preparedRow[i] = getData(data, 0);
+      } else {
+        preparedRow[i] = getData(data, 0);
+      }
+      i++;
+    }
     // at last add implicit column position reference(PID)
-
-    preparedRow[i] = wrapper.getImplicitColumnByteArray();
+    preparedRow[i] = implicitColumnByteArray;
     return preparedRow;
+  }
+
+  private byte[] getData(Object[] data, int index) {
+    if (data.length == 0) {
+      return new byte[0];
+    } else if (data[0] == null) {
+      return CarbonCommonConstants.MEMBER_DEFAULT_VAL_ARRAY;
+    }
+    return (byte[]) data[index];
   }
 
   /**

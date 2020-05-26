@@ -136,6 +136,13 @@ object CarbonFilters {
                 CarbonSparkDataSourceUtil.convertSparkToCarbonDataType(dataType)),
                 dataType, expr.nullable)
           }, ExpressionType.CONTAINSWITH))
+        case CarbonArrayContains(expr: Expression) =>
+          Some(new SparkUnknownExpression(expr.transform {
+            case AttributeReference(name, dataType, _, _) =>
+              CarbonBoundReference(new CarbonColumnExpression(name.toString,
+                CarbonSparkDataSourceUtil.convertSparkToCarbonDataType(dataType)),
+                dataType, expr.nullable)
+          }, ExpressionType.ARRAY_CONTAINS))
         case CastExpr(expr: Expression) =>
           Some(transformExpression(expr))
         case FalseExpr() =>
