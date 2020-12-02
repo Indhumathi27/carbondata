@@ -43,6 +43,7 @@
     <build.directory.projectStreaming>../../streaming/target</build.directory.projectStreaming>
     <build.directory.projectBloom>../../index/bloom/target</build.directory.projectBloom>
     <build.directory.projectLucene>../../index/lucene/target</build.directory.projectLucene>
+    <build.directory.projectPresto>../../integration/presto/target</build.directory.projectPresto>
 
     <classes.directory.projectCommon>../../common/target/classes</classes.directory.projectCommon>
     <classes.directory.projectCore>../../core/target/classes</classes.directory.projectCore>
@@ -54,6 +55,8 @@
     <classes.directory.projectStreaming>../../streaming/target/classes</classes.directory.projectStreaming>
     <classes.directory.projectBloom>../../index/bloom/target/classes</classes.directory.projectBloom>
     <classes.directory.projectLucene>../../index/lucene/target/classes</classes.directory.projectLucene>
+    <classes.directory.projectPresto>../../integration/presto/target/classes</classes.directory.projectPresto>
+
 
     <sources.directory.projectCommon>../../common/src/main/java</sources.directory.projectCommon>
     <sources.directory.projectCore>../../core/src/main/java</sources.directory.projectCore>
@@ -67,6 +70,9 @@
     <sources.directory.projectStreaming>../../streaming/src/main/scala</sources.directory.projectStreaming>
     <sources.directory.projectBloom>../../index/bloom/src/main/java</sources.directory.projectBloom>
     <sources.directory.projectLucene>../../index/lucene/src/main/java</sources.directory.projectLucene>
+    <sources.directory.projectPresto>../../integration/presto/src/main/java</sources.directory.projectPresto>
+    <sources.directory.projectPresto>../../integration/presto/src/main/scala</sources.directory.projectPresto>
+
 
     <generated-sources.directory.projectCommon>../../common/target/generated-sources/annotations</generated-sources.directory.projectCommon>
     <generated-sources.directory.projectCore>../../core/target/generated-sources/annotations</generated-sources.directory.projectCore>
@@ -78,6 +84,8 @@
     <generated-sources.directory.projectStreaming>../../streaming/target/generated-sources/annotations</generated-sources.directory.projectStreaming>
     <generated-sources.directory.projectBloom>../../index/bloom/target/generated-sources/annotations</generated-sources.directory.projectBloom>
     <generated-sources.directory.projectLucene>../../index/lucene/target/generated-sources/annotations</generated-sources.directory.projectLucene>
+    <generated-sources.directory.projectPresto>../../integration/presto/target/generated-sources/annotations</generated-sources.directory.projectPresto>
+
 
   </properties>
 
@@ -450,9 +458,9 @@
                     <!--<fileset dir="${build.directory.projectHive}" erroronmissingdir="false">
                       <include name="jacoco.exec" />
                     </fileset>-->
-                    <!--<fileset dir="${build.directory.projectPresto}" erroronmissingdir="false">
+                    <fileset dir="${build.directory.projectPresto}" erroronmissingdir="false">
                       <include name="jacoco.exec" />
-                    </fileset>-->
+                    </fileset>
                     <fileset dir="${build.directory.projectStoreSdk}" erroronmissingdir="false">
                       <include name="jacoco.exec" />
                     </fileset>
@@ -477,7 +485,7 @@
                         <!--<fileset dir="${classes.directory.projectFormat}" erroronmissingdir="false" />-->
                         <fileset dir="${classes.directory.projectSpark}" erroronmissingdir="false" />
                         <!--<fileset dir="${classes.directory.projectHive}" erroronmissingdir="false" />-->
-                        <!--<fileset dir="${classes.directory.projectPresto}" erroronmissingdir="false" />-->
+                        <fileset dir="${classes.directory.projectPresto}" erroronmissingdir="false" />
                         <fileset dir="${classes.directory.projectStoreSdk}" erroronmissingdir="false" />
                         <fileset dir="${classes.directory.projectStreaming}" erroronmissingdir="false" />
                         <fileset dir="${classes.directory.projectBloom}" erroronmissingdir="false" />
@@ -491,7 +499,7 @@
                         <!--<fileset dir="${sources.directory.projectFormat}" erroronmissingdir="false" />-->
                         <fileset dir="${sources.directory.projectSpark}" erroronmissingdir="false" />
                         <!--<fileset dir="${sources.directory.projectHive}" erroronmissingdir="false" />-->
-                        <!--<fileset dir="${sources.directory.projectPresto}" erroronmissingdir="false" />-->
+                        <fileset dir="${sources.directory.projectPresto}" erroronmissingdir="false" />
                         <fileset dir="${sources.directory.projectStoreSdk}" erroronmissingdir="false" />
                         <fileset dir="${sources.directory.projectStreaming}" erroronmissingdir="false" />
                         <fileset dir="${sources.directory.projectBloom}" erroronmissingdir="false" />

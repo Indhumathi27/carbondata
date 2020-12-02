@@ -106,12 +106,12 @@
     <module>index/examples</module>
     <module>streaming</module>
     <module>geo</module>
-    <module>integration/spark</module>
     <module>integration/hive</module>
     <module>integration/flink</module>
     <module>integration/flink-build</module>
     <module>integration/flink-proxy</module>
     <module>integration/presto</module>
+    <module>integration/spark</module>
     <module>sdk/sdk</module>
     <module>tools/cli</module>
     <module>examples/spark</module>
@@ -146,7 +146,7 @@
     <airlift.version>0.36</airlift.version>
     <presto.mvn.plugin.groupid>io.prestosql</presto.mvn.plugin.groupid>
     <presto.mvn.plugin.version>6</presto.mvn.plugin.version>
-    <presto.depndency.scope>compile</presto.depndency.scope>
+    <presto.dependency.scope>compile</presto.dependency.scope>
     <!--todo:this can be enabled when presto tests need to be run-->
     <!--<spark.hadoop.hive.metastore.uris>thrift://localhost:8086</spark.hadoop.hive.metastore.uris>-->
     <suite.name>org.apache.carbondata.cluster.sdv.suite.SDVSuites</suite.name>
@@ -610,6 +610,10 @@
                 <sourceDirectory>${basedir}/index/lucene/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/index/secondary-index/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/index/secondary-index/src/main/java</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestosql</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestodb</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/java</sourceDirectory>
               </sourceDirectories>
             </configuration>
           </plugin>
@@ -682,6 +686,10 @@
                 <sourceDirectory>${basedir}/index/lucene/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/index/secondary-index/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/index/secondary-index/src/main/java</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestosql</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestodb</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/java</sourceDirectory>
               </sourceDirectories>
             </configuration>
           </plugin>
@@ -749,7 +757,7 @@
         <presto.hadoop.version>2.7.4-3</presto.hadoop.version>
         <presto.mvn.plugin.groupid>io.takari.maven.plugins</presto.mvn.plugin.groupid>
         <presto.mvn.plugin.version>0.1.12</presto.mvn.plugin.version>
-        <presto.depndency.scope>provided</presto.depndency.scope>
+        <presto.dependency.scope>provided</presto.dependency.scope>
       </properties>
       <build>
         <plugins>
@@ -766,6 +774,8 @@
               </jacocoReports>
               <sourceDirectories>
                 <sourceDirectory>${basedir}/integration/presto/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestosql</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestodb</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/presto/src/main/java</sourceDirectory>
               </sourceDirectories>
             </configuration>
@@ -789,7 +799,6 @@
         <presto.hadoop.version>3.2.0-2</presto.hadoop.version>
         <presto.mvn.plugin.groupid>io.prestosql</presto.mvn.plugin.groupid>
         <presto.mvn.plugin.version>6</presto.mvn.plugin.version>
-        <presto.depndency.scope>compile</presto.depndency.scope>
       </properties>
       <build>
         <plugins>
@@ -806,6 +815,8 @@
               </jacocoReports>
               <sourceDirectories>
                 <sourceDirectory>${basedir}/integration/presto/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestosql</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/presto/src/main/prestodb</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/presto/src/main/java</sourceDirectory>
               </sourceDirectories>
             </configuration>
