@@ -580,6 +580,12 @@
       <resource>
         <directory>src/main/resources</directory>
       </resource>
+      <resource>
+        <directory>.</directory>
+        <includes>
+          <include>CARBON_SPARK_INTERFACELogResource.properties</include>
+        </includes>
+      </resource>
     </resources>
     <plugins>
       <plugin>
@@ -706,18 +712,6 @@
             <version>3.0.0</version>
             <executions>
               <execution>
-                <id>add-test-source</id>
-                <phase>generate-sources</phase>
-                <goals>
-                  <goal>add-test-source</goal>
-                </goals>
-                <configuration>
-                  <sources>
-                    <source>src/test/prestodb</source>
-                  </sources>
-                </configuration>
-              </execution>
-              <execution>
                 <id>add-source</id>
                 <phase>generate-sources</phase>
                 <goals>
@@ -755,18 +749,6 @@
             <artifactId>build-helper-maven-plugin</artifactId>
             <version>3.0.0</version>
             <executions>
-              <execution>
-                <id>add-test-source</id>
-                <phase>generate-sources</phase>
-                <goals>
-                  <goal>add-test-source</goal>
-                </goals>
-                <configuration>
-                  <sources>
-                    <source>src/test/prestosql</source>
-                  </sources>
-                </configuration>
-              </execution>
               <execution>
                 <id>add-source</id>
                 <phase>generate-sources</phase>

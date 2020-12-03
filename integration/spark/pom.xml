@@ -39,6 +39,7 @@
     <build.directory.projectHadoop>../../hadoop/target</build.directory.projectHadoop>
     <build.directory.projectFormat>../../format/target</build.directory.projectFormat>
     <build.directory.projectSpark>../../integration/spark/target</build.directory.projectSpark>
+    <build.directory.projectPresto>../../integration/presto/target</build.directory.projectPresto>
     <build.directory.projectStoreSdk>../../sdk/sdk/target</build.directory.projectStoreSdk>
     <build.directory.projectStreaming>../../streaming/target</build.directory.projectStreaming>
     <build.directory.projectBloom>../../index/bloom/target</build.directory.projectBloom>
@@ -50,6 +51,7 @@
     <classes.directory.projectHadoop>../../hadoop/target/classes</classes.directory.projectHadoop>
     <classes.directory.projectFormat>../../format/target/classes</classes.directory.projectFormat>
     <classes.directory.projectSpark>../../integration/spark/target/classes</classes.directory.projectSpark>
+    <classes.directory.projectPresto>../../integration/presto/target/classes</classes.directory.projectPresto>
     <classes.directory.projectStoreSdk>../../sdk/sdk/target/classes</classes.directory.projectStoreSdk>
     <classes.directory.projectStreaming>../../streaming/target/classes</classes.directory.projectStreaming>
     <classes.directory.projectBloom>../../index/bloom/target/classes</classes.directory.projectBloom>
@@ -62,6 +64,9 @@
     <sources.directory.projectFormat>../../format/src/main/thrift</sources.directory.projectFormat>
     <sources.directory.projectSpark>../../integration/spark/src/main/scala</sources.directory.projectSpark>
     <sources.directory.projectSpark>../../integration/spark/src/main/java</sources.directory.projectSpark>
+    <sources.directory.projectPresto>../../integration/presto/src/main/java</sources.directory.projectPresto>
+    <sources.directory.projectPresto>../../integration/presto/src/main/prestosql</sources.directory.projectPresto>
+    <sources.directory.projectPresto>../../integration/presto/src/main/scala</sources.directory.projectPresto>
     <sources.directory.projectStoreSdk>../../sdk/sdk/src/main/java</sources.directory.projectStoreSdk>
     <sources.directory.projectStreaming>../../streaming/src/main/java</sources.directory.projectStreaming>
     <sources.directory.projectStreaming>../../streaming/src/main/scala</sources.directory.projectStreaming>
@@ -74,6 +79,7 @@
     <generated-sources.directory.projectHadoop>../../hadoop/target/generated-sources/annotations</generated-sources.directory.projectHadoop>
     <generated-sources.directory.projectFormat>../../format/target/generated-sources/annotations</generated-sources.directory.projectFormat>
     <generated-sources.directory.projectSpark>../../integration/spark/target/generated-sources/annotations</generated-sources.directory.projectSpark>
+    <generated-sources.directory.projectPresto>../../integration/presto/target/generated-sources/annotations</generated-sources.directory.projectPresto>
     <generated-sources.directory.projectStoreSdk>../../sdk/sdk/target/generated-sources/annotations</generated-sources.directory.projectStoreSdk>
     <generated-sources.directory.projectStreaming>../../streaming/target/generated-sources/annotations</generated-sources.directory.projectStreaming>
     <generated-sources.directory.projectBloom>../../index/bloom/target/generated-sources/annotations</generated-sources.directory.projectBloom>
@@ -450,9 +456,9 @@
                     <!--<fileset dir="${build.directory.projectHive}" erroronmissingdir="false">
                       <include name="jacoco.exec" />
                     </fileset>-->
-                    <!--<fileset dir="${build.directory.projectPresto}" erroronmissingdir="false">
+                    <fileset dir="${build.directory.projectPresto}" erroronmissingdir="false">
                       <include name="jacoco.exec" />
-                    </fileset>-->
+                    </fileset>
                     <fileset dir="${build.directory.projectStoreSdk}" erroronmissingdir="false">
                       <include name="jacoco.exec" />
                     </fileset>
@@ -477,7 +483,7 @@
                         <!--<fileset dir="${classes.directory.projectFormat}" erroronmissingdir="false" />-->
                         <fileset dir="${classes.directory.projectSpark}" erroronmissingdir="false" />
                         <!--<fileset dir="${classes.directory.projectHive}" erroronmissingdir="false" />-->
-                        <!--<fileset dir="${classes.directory.projectPresto}" erroronmissingdir="false" />-->
+                        <fileset dir="${classes.directory.projectPresto}" erroronmissingdir="false" />
                         <fileset dir="${classes.directory.projectStoreSdk}" erroronmissingdir="false" />
                         <fileset dir="${classes.directory.projectStreaming}" erroronmissingdir="false" />
                         <fileset dir="${classes.directory.projectBloom}" erroronmissingdir="false" />
@@ -491,7 +497,7 @@
                         <!--<fileset dir="${sources.directory.projectFormat}" erroronmissingdir="false" />-->
                         <fileset dir="${sources.directory.projectSpark}" erroronmissingdir="false" />
                         <!--<fileset dir="${sources.directory.projectHive}" erroronmissingdir="false" />-->
-                        <!--<fileset dir="${sources.directory.projectPresto}" erroronmissingdir="false" />-->
+                        <fileset dir="${sources.directory.projectPresto}" erroronmissingdir="false" />
                         <fileset dir="${sources.directory.projectStoreSdk}" erroronmissingdir="false" />
                         <fileset dir="${sources.directory.projectStreaming}" erroronmissingdir="false" />
                         <fileset dir="${sources.directory.projectBloom}" erroronmissingdir="false" />
