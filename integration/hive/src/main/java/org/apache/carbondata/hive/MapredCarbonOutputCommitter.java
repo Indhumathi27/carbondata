@@ -18,11 +18,21 @@
 package org.apache.carbondata.hive;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
+import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
+import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.metadata.SegmentFileStore;
+import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.ObjectSerializationUtil;
 import org.apache.carbondata.core.util.ThreadLocalSessionInfo;
 import org.apache.carbondata.hadoop.api.CarbonOutputCommitter;
@@ -128,11 +138,54 @@ public class MapredCarbonOutputCommitter extends OutputCommitter {
       Configuration configuration = jobContext.getConfiguration();
       CarbonLoadModel carbonLoadModel = MapredCarbonOutputFormat.getLoadModel(configuration);
       ThreadLocalSessionInfo.unsetAll();
-      SegmentFileStore.writeSegmentFile(carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
-          carbonLoadModel.getSegmentId(), String.valueOf(carbonLoadModel.getFactTimeStamp()));
-      SegmentFileStore
-          .mergeIndexAndWriteSegmentFile(carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
-              carbonLoadModel.getSegmentId(), String.valueOf(carbonLoadModel.getFactTimeStamp()));
+      boolean isMergeIndexEnabled = Boolean.parseBoolean(CarbonProperties.getInstance()
+          .getProperty(CarbonCommonConstants.CARBON_MERGE_INDEX_IN_SEGMENT,
+              CarbonCommonConstants.CARBON_MERGE_INDEX_IN_SEGMENT_DEFAULT));
+      if (!carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable().isHivePartitionTable()) {
+        SegmentFileStore
+            .writeSegmentFile(carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
+                carbonLoadModel.getSegmentId(), String.valueOf(carbonLoadModel.getFactTimeStamp()));
+      } else {
+        String tableFactLocation =
+            carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable().getTablePath();
+        List<CarbonFile> carbonFiles = FileFactory.getCarbonFile(tableFactLocation).listFiles(true,
+            file -> (file.getName().endsWith(".carbonindex") || file.getName()
+                .endsWith(".carbonindexmerge")) && file.getName()
+                .contains("" + carbonLoadModel.getFactTimeStamp()));
+        Map<String, Set<String>> partitionIndexMap = new HashMap<>();
+        for (CarbonFile carbonFile : carbonFiles) {
+          String absTablePath = carbonFile.getAbsolutePath();
+          String partitionPath =
+              absTablePath.substring(0, absTablePath.indexOf(carbonFile.getName()));
+          Set<String> indexSet = partitionIndexMap.get(partitionPath);
+          if (indexSet == null) {
+            indexSet = new HashSet<>();
+            indexSet.add(carbonFile.getName());
+            partitionIndexMap.put(partitionPath, indexSet);
+          } else {
+            indexSet.add(carbonFile.getAbsolutePath());
+          }
+        }
+        // check if mergeIndex is enabled. If enabled, then write segment file and call merge
+        // index files. If disabled, then set the index files name and partitions to jobContext,
+        // commitJob will handle writing segment file
+        if (isMergeIndexEnabled) {
+          SegmentFileStore
+              .writeSegmentFile(carbonLoadModel.getTablePath(), carbonLoadModel.getSegmentId(),
+                  String.valueOf(carbonLoadModel.getFactTimeStamp()),
+                  (new ArrayList<>(partitionIndexMap.keySet())), partitionIndexMap);
+        } else {
+          jobContext.getConfiguration().set("carbon.index.files.name",
+              ObjectSerializationUtil.convertObjectToString(partitionIndexMap));
+          jobContext.getConfiguration().set("carbon.output.partitions.name", ObjectSerializationUtil
+              .convertObjectToString(new ArrayList<>(partitionIndexMap.keySet())));
+        }
+      }
+      if (isMergeIndexEnabled) {
+        SegmentFileStore.mergeIndexAndWriteSegmentFile(
+            carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
+            carbonLoadModel.getSegmentId(), String.valueOf(carbonLoadModel.getFactTimeStamp()));
+      }
       CarbonTableOutputFormat.setLoadModel(configuration, carbonLoadModel);
       carbonOutputCommitter.commitJob(jobContext);
     } catch (Exception e) {

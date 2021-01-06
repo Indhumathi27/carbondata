@@ -885,7 +885,12 @@ public class SegmentFileStore {
           Set<String> files = entry.getValue().getFiles();
           if (null != files && !files.isEmpty()) {
             for (String indexFile : files) {
-              String indexFilePath = location + CarbonCommonConstants.FILE_SEPARATOR + indexFile;
+              String indexFilePath;
+              if (location.endsWith("/")) {
+                indexFilePath = location + indexFile;
+              } else {
+                indexFilePath = location + CarbonCommonConstants.FILE_SEPARATOR + indexFile;
+              }
               // In the 1.3 store, files field contain the carbonindex files names
               // even if they are merged to a carbonindexmerge file. In that case we have to check
               // for the physical existence of the file to decide
