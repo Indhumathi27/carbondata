@@ -22,14 +22,17 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
+import org.apache.carbondata.core.datastore.filesystem.CarbonFileFilter;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.fileoperations.FileWriteOperation;
 import org.apache.carbondata.core.index.Segment;
@@ -207,6 +210,14 @@ public class CarbonIndexFileMergeWriter {
   public String writeMergeIndexFileBasedOnSegmentFile(String segmentId,
       List<String> indexFileNamesTobeAdded, SegmentFileStore segmentFileStore,
       CarbonFile[] indexFiles, String uuid, String partitionPath) throws IOException {
+    return writeMergeIndexFileBasedOnSegmentFile(segmentId, indexFileNamesTobeAdded,
+        segmentFileStore, indexFiles, uuid, partitionPath, new ArrayList<>(), false);
+  }
+
+  public String writeMergeIndexFileBasedOnSegmentFile(String segmentId,
+      List<String> indexFileNamesTobeAdded, SegmentFileStore segmentFileStore,
+      CarbonFile[] indexFiles, String uuid, String partitionPath, List<String> partitionNames,
+      boolean isHiveWriteFlow) throws IOException {
     SegmentIndexFileStore fileStore = new SegmentIndexFileStore();
     // in case of partition table, merge index file to be created for each partition
     if (null != partitionPath) {
@@ -264,6 +275,20 @@ public class CarbonIndexFileMergeWriter {
         + CarbonTablePath.SEGMENT_EXT;
     String path = CarbonTablePath.getSegmentFilesLocation(table.getTablePath())
         + CarbonCommonConstants.FILE_SEPARATOR + newSegmentFileName;
+    if (table.isHivePartitionTable() && isHiveWriteFlow) {
+      try {
+        SegmentFileStore
+            .writeSegmentFile(table.getTablePath(), segmentId, uuid, partitionNames, null, true);
+      } catch (Exception ex) {
+        // delete merge index file if created,
+        // keep only index files as segment file writing is failed
+        for (String mergeIndexFile : mergeIndexFiles) {
+          FileFactory.getCarbonFile(mergeIndexFile).delete();
+        }
+        LOGGER.error("unable to write segment file during merge index writing: " + ex.getMessage());
+        throw ex;
+      }
+    }
     if (!table.isHivePartitionTable()) {
       String content = SegmentStatusManager.readFileAsString(path);
       try {

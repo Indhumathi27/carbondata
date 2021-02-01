@@ -35,6 +35,7 @@ import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.ObjectSerializationUtil;
 import org.apache.carbondata.core.util.ThreadLocalSessionInfo;
+import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.hadoop.api.CarbonOutputCommitter;
 import org.apache.carbondata.hadoop.api.CarbonTableOutputFormat;
 import org.apache.carbondata.hive.util.HiveCarbonUtil;
@@ -138,6 +139,7 @@ public class MapredCarbonOutputCommitter extends OutputCommitter {
       Configuration configuration = jobContext.getConfiguration();
       CarbonLoadModel carbonLoadModel = MapredCarbonOutputFormat.getLoadModel(configuration);
       ThreadLocalSessionInfo.unsetAll();
+      Map<String, Set<String>> partitionIndexMap = new HashMap<>();
       boolean isMergeIndexEnabled = Boolean.parseBoolean(CarbonProperties.getInstance()
           .getProperty(CarbonCommonConstants.CARBON_MERGE_INDEX_IN_SEGMENT,
               CarbonCommonConstants.CARBON_MERGE_INDEX_IN_SEGMENT_DEFAULT));
@@ -152,7 +154,6 @@ public class MapredCarbonOutputCommitter extends OutputCommitter {
             file -> (file.getName().endsWith(".carbonindex") || file.getName()
                 .endsWith(".carbonindexmerge")) && file.getName()
                 .contains("" + carbonLoadModel.getFactTimeStamp()));
-        Map<String, Set<String>> partitionIndexMap = new HashMap<>();
         for (CarbonFile carbonFile : carbonFiles) {
           String absTablePath = carbonFile.getAbsolutePath();
           String partitionPath =
@@ -181,13 +182,14 @@ public class MapredCarbonOutputCommitter extends OutputCommitter {
               .convertObjectToString(new ArrayList<>(partitionIndexMap.keySet())));
         }
       }
+      CarbonTableOutputFormat.setLoadModel(configuration, carbonLoadModel);
+      carbonOutputCommitter.commitJob(jobContext);
       if (isMergeIndexEnabled) {
         SegmentFileStore.mergeIndexAndWriteSegmentFile(
             carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
-            carbonLoadModel.getSegmentId(), String.valueOf(carbonLoadModel.getFactTimeStamp()));
+            carbonLoadModel.getSegmentId(), String.valueOf(carbonLoadModel.getFactTimeStamp()),
+            (new ArrayList<>(partitionIndexMap.keySet())));
       }
-      CarbonTableOutputFormat.setLoadModel(configuration, carbonLoadModel);
-      carbonOutputCommitter.commitJob(jobContext);
     } catch (Exception e) {
       LOGGER.error(e);
       throw e;
