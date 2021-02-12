@@ -82,8 +82,8 @@ import org.apache.log4j.Logger;
  */
 public class SegmentFileStore {
 
-  private static final Logger LOGGER = LogServiceFactory.getLogService(
-      SegmentFileStore.class.getCanonicalName());
+  private static final Logger LOGGER =
+      LogServiceFactory.getLogService(SegmentFileStore.class.getCanonicalName());
 
   private SegmentFile segmentFile;
 
@@ -117,11 +117,12 @@ public class SegmentFileStore {
    * Method to create and write the segment file, removes the temporary directories from all the
    * respective partition directories. This method is invoked only when {@link
    * CarbonCommonConstants#CARBON_MERGE_INDEX_IN_SEGMENT} is disabled.
-   * @param tablePath Table path
-   * @param segmentId Segment id
-   * @param timeStamp FactTimeStamp
-   * @param partitionNames Partition names list
-   * @param indexFileNames Index files map with partition as key and index file names set as value
+   *
+   * @param tablePath        Table path
+   * @param segmentId        Segment id
+   * @param timeStamp        FactTimeStamp
+   * @param partitionNames   Partition names list
+   * @param indexFileNames   Index files map with partition as key and index file names set as value
    * @param isMergeIndexFlow merge index flow
    * @throws IOException
    */
@@ -244,9 +245,10 @@ public class SegmentFileStore {
 
   /**
    * Generate Segment file name
+   *
    * @param segmentId segment id
-   * @param UUID unique string, typically caller can use the loading start
-   *             timestamp in CarbonLoadModel
+   * @param UUID      unique string, typically caller can use the loading start
+   *                  timestamp in CarbonLoadModel
    * @return
    */
   public static String genSegmentFileName(String segmentId, String UUID) {
@@ -279,8 +281,8 @@ public class SegmentFileStore {
     return segmentFolder.listFiles(new CarbonFileFilter() {
       @Override
       public boolean accept(CarbonFile file) {
-        return (file.getName().endsWith(CarbonTablePath.INDEX_FILE_EXT) ||
-            file.getName().endsWith(CarbonTablePath.MERGE_INDEX_FILE_EXT));
+        return (file.getName().endsWith(CarbonTablePath.INDEX_FILE_EXT) || file.getName()
+            .endsWith(CarbonTablePath.MERGE_INDEX_FILE_EXT));
       }
     });
   }
@@ -289,7 +291,7 @@ public class SegmentFileStore {
    * Write segment file to the metadata folder of the table.
    *
    * @param carbonTable CarbonTable
-   * @param segment segment
+   * @param segment     segment
    * @return boolean , whether write is success or fail.
    */
   public static boolean writeSegmentFile(CarbonTable carbonTable, Segment segment)
@@ -324,12 +326,8 @@ public class SegmentFileStore {
     return false;
   }
 
-  public static boolean writeSegmentFileForOthers(
-      CarbonTable carbonTable,
-      Segment segment,
-      PartitionSpec partitionSpec,
-      List<FileStatus> partitionDataFiles)
-      throws IOException {
+  public static boolean writeSegmentFileForOthers(CarbonTable carbonTable, Segment segment,
+      PartitionSpec partitionSpec, List<FileStatus> partitionDataFiles) throws IOException {
     String tablePath = carbonTable.getTablePath();
     CarbonFile[] dataFiles = null;
     if (partitionDataFiles.isEmpty()) {
@@ -337,9 +335,9 @@ public class SegmentFileStore {
       dataFiles = segmentFolder.listFiles(
           file -> (!file.getName().equals("_SUCCESS") && !file.getName().endsWith(".crc")));
     } else {
-      dataFiles = partitionDataFiles.stream().map(
-          fileStatus -> FileFactory.getCarbonFile(
-              fileStatus.getPath().toString())).toArray(CarbonFile[]::new);
+      dataFiles = partitionDataFiles.stream()
+          .map(fileStatus -> FileFactory.getCarbonFile(fileStatus.getPath().toString()))
+          .toArray(CarbonFile[]::new);
     }
     if (dataFiles != null && dataFiles.length > 0) {
       SegmentFile segmentFile = new SegmentFile();
@@ -379,7 +377,8 @@ public class SegmentFileStore {
       List<CarbonFile> carbonIndexFiles = sfs.getIndexCarbonFiles();
       new CarbonIndexFileMergeWriter(carbonTable)
           .writeMergeIndexFileBasedOnSegmentFile(segmentId, null, sfs,
-              carbonIndexFiles.toArray(new CarbonFile[carbonIndexFiles.size()]), UUID, null, partitionNames, true);
+              carbonIndexFiles.toArray(new CarbonFile[carbonIndexFiles.size()]), UUID, null,
+              partitionNames, true);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -395,8 +394,7 @@ public class SegmentFileStore {
    * @throws IOException
    */
   public static String writeSegmentFile(CarbonTable carbonTable, String segmentId, String uuid,
-        String absSegPath, SegmentMetaDataInfo segmentMetaDataInfo)
-      throws IOException {
+      String absSegPath, SegmentMetaDataInfo segmentMetaDataInfo) throws IOException {
     String tablePath = carbonTable.getTablePath();
     boolean supportFlatFolder = carbonTable.isSupportFlatFolder();
     String segmentPath = absSegPath;
@@ -483,13 +481,13 @@ public class SegmentFileStore {
 
   /**
    * Writes the segment file in json format
+   *
    * @param segmentFile
    * @param path
    * @throws IOException
    */
   public static void writeSegmentFile(SegmentFile segmentFile, String path) throws IOException {
-    AtomicFileOperations fileWrite =
-        AtomicFileOperationFactory.getAtomicFileOperations(path);
+    AtomicFileOperations fileWrite = AtomicFileOperationFactory.getAtomicFileOperations(path);
     BufferedWriter brWriter = null;
     DataOutputStream dataOutputStream = null;
     Gson gsonObjectToWrite = new Gson();
@@ -517,8 +515,7 @@ public class SegmentFileStore {
    * @throws IOException
    */
   public static SegmentFile mergeSegmentFiles(String readPath, String mergeFileName,
-      String writePath)
-      throws IOException {
+      String writePath) throws IOException {
     CarbonFile[] segmentFiles = getSegmentFiles(readPath);
     if (segmentFiles != null && segmentFiles.length > 0) {
       SegmentFile segmentFile = mergeSegmentFiles(mergeFileName, writePath, segmentFiles);
@@ -548,8 +545,8 @@ public class SegmentFileStore {
   }
 
   public static String getSegmentFilePath(String tablePath, String segmentFileName) {
-    return CarbonTablePath.getSegmentFilesLocation(tablePath) +
-        CarbonCommonConstants.FILE_SEPARATOR + segmentFileName;
+    return CarbonTablePath.getSegmentFilesLocation(tablePath) + CarbonCommonConstants.FILE_SEPARATOR
+        + segmentFileName;
   }
 
   /**
@@ -767,6 +764,7 @@ public class SegmentFileStore {
   /**
    * Gets all the index files and related carbondata files from this segment. First user needs to
    * call @readIndexFiles method before calling it.
+   *
    * @return
    */
   public Map<String, List<String>> getIndexFilesMap() {
@@ -775,8 +773,9 @@ public class SegmentFileStore {
 
   /**
    * Reads all index files which are located in this segment. First user needs to call
-   * @readSegment method before calling it.
+   *
    * @throws IOException
+   * @readSegment method before calling it.
    */
   public void readIndexFiles(Configuration configuration) throws IOException {
     readIndexFiles(SegmentStatus.SUCCESS, false, configuration);
@@ -789,6 +788,7 @@ public class SegmentFileStore {
   /**
    * Reads all index files as per the status of the file. In case of @ignoreStatus is true it just
    * reads all index files
+   *
    * @param status
    * @param ignoreStatus
    * @throws IOException
@@ -833,6 +833,7 @@ public class SegmentFileStore {
 
   /**
    * Reads all index files and get the schema of each index file
+   *
    * @throws IOException
    */
   public static Map<String, List<ColumnSchema>> getSchemaFiles(SegmentFile segmentFile,
@@ -846,8 +847,8 @@ public class SegmentFileStore {
     Map<String, byte[]> carbonIndexMap = indexFileStore.getCarbonIndexMapWithFullPath();
     DataFileFooterConverter fileFooterConverter = new DataFileFooterConverter();
     for (Map.Entry<String, byte[]> entry : carbonIndexMap.entrySet()) {
-      List<DataFileFooter> indexInfo = fileFooterConverter
-          .getIndexInfo(entry.getKey(), entry.getValue());
+      List<DataFileFooter> indexInfo =
+          fileFooterConverter.getIndexInfo(entry.getKey(), entry.getValue());
       if (indexInfo.size() > 0) {
         schemaMap.put(entry.getKey(), indexInfo.get(0).getColumnInTable());
       }
@@ -857,6 +858,7 @@ public class SegmentFileStore {
 
   /**
    * Gets all index files from this segment
+   *
    * @return
    */
   public Map<String, String> getIndexFiles() {
@@ -880,6 +882,7 @@ public class SegmentFileStore {
 
   /**
    * Gets all index files from this segment
+   *
    * @return
    */
   public Map<String, String> getIndexOrMergeFiles() throws IOException {
@@ -928,12 +931,13 @@ public class SegmentFileStore {
 
   /**
    * Gets all carbon index files from this segment
+   *
    * @return
    */
   public List<CarbonFile> getIndexCarbonFiles() {
     Map<String, String> indexFiles = getIndexFiles();
     Set<String> files = new HashSet<>();
-    for (Map.Entry<String, String> entry: indexFiles.entrySet()) {
+    for (Map.Entry<String, String> entry : indexFiles.entrySet()) {
       Path path = new Path(entry.getKey());
       files.add(entry.getKey());
       if (entry.getValue() != null) {
@@ -958,9 +962,8 @@ public class SegmentFileStore {
    * @param uniqueId
    * @throws IOException
    */
-  public void dropPartitions(Segment segment, List<PartitionSpec> partitionSpecs,
-      String uniqueId, List<String> toBeDeletedSegments, List<String> toBeUpdatedSegments)
-      throws IOException {
+  public void dropPartitions(Segment segment, List<PartitionSpec> partitionSpecs, String uniqueId,
+      List<String> toBeDeletedSegments, List<String> toBeUpdatedSegments) throws IOException {
     readSegment(tablePath, segment.getSegmentFileName());
     boolean updateSegment = false;
     for (Map.Entry<String, FolderDetails> entry : segmentFile.getLocationMap().entrySet()) {
@@ -982,10 +985,9 @@ public class SegmentFileStore {
     }
     if (updateSegment) {
       String writePath = CarbonTablePath.getSegmentFilesLocation(tablePath);
-      writePath =
-          writePath + CarbonCommonConstants.FILE_SEPARATOR +
-              SegmentFileStore.genSegmentFileName(segment.getSegmentNo(),  String.valueOf(uniqueId))
-              + CarbonTablePath.SEGMENT_EXT;
+      writePath = writePath + CarbonCommonConstants.FILE_SEPARATOR + SegmentFileStore
+          .genSegmentFileName(segment.getSegmentNo(), String.valueOf(uniqueId))
+          + CarbonTablePath.SEGMENT_EXT;
       writeSegmentFile(segmentFile, writePath);
     }
     // Check whether we can completely remove the segment.
@@ -1014,14 +1016,13 @@ public class SegmentFileStore {
    * @throws IOException
    */
   public static void commitDropPartitions(CarbonTable carbonTable, String uniqueId,
-      List<String> toBeUpdatedSegments, List<String> toBeDeleteSegments,
-      String uuid) throws IOException {
+      List<String> toBeUpdatedSegments, List<String> toBeDeleteSegments, String uuid)
+      throws IOException {
     if (toBeDeleteSegments.size() > 0 || toBeUpdatedSegments.size() > 0) {
       Set<Segment> segmentSet = new HashSet<>(
           new SegmentStatusManager(carbonTable.getAbsoluteTableIdentifier())
               .getValidAndInvalidSegments(carbonTable.isMV()).getValidSegments());
-      CarbonUpdateUtil.updateTableMetadataStatus(segmentSet, carbonTable, uniqueId,
-          true, false,
+      CarbonUpdateUtil.updateTableMetadataStatus(segmentSet, carbonTable, uniqueId, true, false,
           Segment.toSegmentList(toBeDeleteSegments, null),
           Segment.toSegmentList(toBeUpdatedSegments, null), uuid);
     }
@@ -1030,17 +1031,15 @@ public class SegmentFileStore {
   /**
    * Clean up invalid data after drop partition in partial segments of table
    *
-   * @param table the table need to cleaned stale data
-   * @param details the segments need to cleaned stale data
+   * @param table          the table need to cleaned stale data
+   * @param details        the segments need to cleaned stale data
    * @param partitionSpecs the partitions need to cleaned stale data
-   * @param forceDelete Whether it should be deleted force or check the time for an hour creation
-   *                    to delete data.
+   * @param forceDelete    Whether it should be deleted force or check the time for an hour creation
+   *                       to delete data.
    * @throws IOException
    */
-  public static void cleanSegments(CarbonTable table,
-      LoadMetadataDetails[] details,
-      List<PartitionSpec> partitionSpecs,
-      boolean forceDelete) throws IOException {
+  public static void cleanSegments(CarbonTable table, LoadMetadataDetails[] details,
+      List<PartitionSpec> partitionSpecs, boolean forceDelete) throws IOException {
     // scan through each segment.
     for (LoadMetadataDetails segment : details) {
       // if this segment is valid then only we will go for deletion of related
@@ -1058,10 +1057,7 @@ public class SegmentFileStore {
         List<String> indexOrMergeFiles = fileStore
             .readIndexFiles(SegmentStatus.MARKED_FOR_DELETE, false, FileFactory.getConfiguration());
         if (forceDelete) {
-          deletePhysicalPartition(
-              partitionSpecs,
-              fileStore.getIndexFilesMap(),
-              indexOrMergeFiles,
+          deletePhysicalPartition(partitionSpecs, fileStore.getIndexFilesMap(), indexOrMergeFiles,
               table.getTablePath());
         }
         for (Map.Entry<String, List<String>> entry : fileStore.indexFilesMap.entrySet()) {
@@ -1105,10 +1101,10 @@ public class SegmentFileStore {
   /**
    * Clean up invalid data after drop partition in all segments of table
    *
-   * @param table the table need to clean stale data
+   * @param table          the table need to clean stale data
    * @param partitionSpecs the partitionSpecs need to clean
-   * @param forceDelete Whether it should be deleted force or check the time for an hour creation
-   *                    to delete data.
+   * @param forceDelete    Whether it should be deleted force or check the time for an hour creation
+   *                       to delete data.
    * @throws IOException
    */
   public static void cleanSegments(CarbonTable table, List<PartitionSpec> partitionSpecs,
@@ -1120,20 +1116,18 @@ public class SegmentFileStore {
   /**
    * Clean up invalid data after drop partition in partial segments of table
    *
-   * @param table the table need to clean stale data
-   * @param segments the segments need to clean stale data
+   * @param table       the table need to clean stale data
+   * @param segments    the segments need to clean stale data
    * @param forceDelete Whether it should be deleted force or check the time for an hour creation
    *                    to delete data.
    * @throws IOException
    */
-  public static void cleanSegments(CarbonTable table,
-      Set<String> segments,
-      List<PartitionSpec> partitionSpecs,
-      boolean forceDelete) throws IOException {
-    LoadMetadataDetails[] details = Arrays
-        .stream(SegmentStatusManager.readLoadMetadata(table.getMetadataPath()))
-        .filter(detail -> segments.contains(detail.getLoadName()))
-        .toArray(LoadMetadataDetails[]::new);
+  public static void cleanSegments(CarbonTable table, Set<String> segments,
+      List<PartitionSpec> partitionSpecs, boolean forceDelete) throws IOException {
+    LoadMetadataDetails[] details =
+        Arrays.stream(SegmentStatusManager.readLoadMetadata(table.getMetadataPath()))
+            .filter(detail -> segments.contains(detail.getLoadName()))
+            .toArray(LoadMetadataDetails[]::new);
     cleanSegments(table, details, partitionSpecs, forceDelete);
   }
 
@@ -1146,17 +1140,18 @@ public class SegmentFileStore {
 
   /**
    * Deletes the segment file and its physical files like partition folders from disk
+   *
    * @param tablePath
    * @param segment
    * @param partitionSpecs
    * @throws IOException
    */
   public static void deleteSegment(String tablePath, Segment segment,
-      List<PartitionSpec> partitionSpecs,
-      SegmentUpdateStatusManager updateStatusManager) throws Exception {
+      List<PartitionSpec> partitionSpecs, SegmentUpdateStatusManager updateStatusManager)
+      throws Exception {
     SegmentFileStore fileStore = new SegmentFileStore(tablePath, segment.getSegmentFileName());
-    List<String> indexOrMergeFiles = fileStore.readIndexFiles(SegmentStatus.SUCCESS, true,
-        FileFactory.getConfiguration());
+    List<String> indexOrMergeFiles =
+        fileStore.readIndexFiles(SegmentStatus.SUCCESS, true, FileFactory.getConfiguration());
     Map<String, List<String>> indexFilesMap = fileStore.getIndexFilesMap();
     for (Map.Entry<String, List<String>> entry : indexFilesMap.entrySet()) {
       FileFactory.deleteFile(entry.getKey());
@@ -1208,8 +1203,8 @@ public class SegmentFileStore {
         Path location = new Path(entry.getKey()).getParent();
         // delete the segment folder
         CarbonFile segmentPath = FileFactory.getCarbonFile(location.toString());
-        if (null != segmentPath && segmentPath.exists() &&
-            !new Path(tablePath).equals(new Path(segmentPath.getAbsolutePath()))) {
+        if (null != segmentPath && segmentPath.exists() && !new Path(tablePath)
+            .equals(new Path(segmentPath.getAbsolutePath()))) {
           FileFactory.deleteAllCarbonFilesOfDir(segmentPath);
         }
       }
@@ -1227,8 +1222,7 @@ public class SegmentFileStore {
     if (path != null && path.listFiles().length == 0) {
       FileFactory.deleteAllCarbonFilesOfDir(path);
       Path parentsLocation = new Path(path.getAbsolutePath()).getParent();
-      deleteEmptyPartitionFolders(
-          FileFactory.getCarbonFile(parentsLocation.toString()));
+      deleteEmptyPartitionFolders(FileFactory.getCarbonFile(parentsLocation.toString()));
     }
   }
 
@@ -1244,6 +1238,7 @@ public class SegmentFileStore {
 
   /**
    * Get the partition specs of the segment
+   *
    * @param segmentId
    * @param tablePath
    * @return
@@ -1261,14 +1256,14 @@ public class SegmentFileStore {
 
   /**
    * Get the partition specs of the segment
+   *
    * @param segmentId
    * @param tablePath
    * @return
    * @throws IOException
    */
   public static List<PartitionSpec> getPartitionSpecs(String segmentId, String tablePath,
-      LoadMetadataDetails[] details)
-      throws IOException {
+      LoadMetadataDetails[] details) throws IOException {
     LoadMetadataDetails segEntry = null;
     for (LoadMetadataDetails entry : details) {
       if (entry.getLoadName().equals(segmentId)) {
@@ -1289,6 +1284,7 @@ public class SegmentFileStore {
 
   /**
    * Move the loaded data from temp folder to respective partition folder.
+   *
    * @param segmentFile
    * @param tmpFolder
    * @param tablePath
@@ -1339,6 +1335,7 @@ public class SegmentFileStore {
 
   /**
    * Returns content of segment
+   *
    * @return
    */
   public Map<String, FolderDetails> getLocationMap() {
@@ -1494,8 +1491,7 @@ public class SegmentFileStore {
     }
 
     public void setSegmentMetaDataInfo(SegmentMetaDataInfo segmentMetaDataInfo) throws IOException {
-      this.segmentMetaDataInfo = ObjectSerializationUtil.convertObjectToString(
-          segmentMetaDataInfo);
+      this.segmentMetaDataInfo = ObjectSerializationUtil.convertObjectToString(segmentMetaDataInfo);
     }
   }
 
